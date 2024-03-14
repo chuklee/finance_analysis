@@ -16,7 +16,7 @@ services:
       - POSTGRES_USER=ricou
       - POSTGRES_PASSWORD=monmdp
     volumes:
-      - /home/ricou/bourse/timescaledb:/var/lib/postgresql/data/timescaledb
+      - ../timescaledb:/var/lib/postgresql/data/timescaledb
     healthcheck:
         test: ["CMD-SHELL", "pg_isready bourse"]
         interval: 6s
@@ -30,7 +30,7 @@ services:
     networks:
       - boursenet
     volumes:
-      - /home/ricou/bourse/data:/home/bourse/data/
+      - ../data:/home/bourse/data/
 
   dashboard:
     image: my_dashboard

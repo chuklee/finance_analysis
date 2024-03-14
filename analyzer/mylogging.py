@@ -34,6 +34,11 @@ def getLogger(name, level=log_level,
     # create file handle if needed
     if filename is not None:
         print("Logs of %s go to %s" % (name, filename))
+        import os
+        if not os.path.exists(os.path.dirname(filename)):
+            print("Creating directory %s" % os.path.dirname(filename))
+            os.makedirs(os.path.dirname(filename))
+        open(filename, 'a').close()
         fh = logging.handlers.RotatingFileHandler(filename, maxBytes=10*1024*1024, backupCount=3)
         if file_level is None:
             fh.setLevel(level)
