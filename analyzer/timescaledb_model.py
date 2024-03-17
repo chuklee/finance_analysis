@@ -141,8 +141,13 @@ class TimescaleStockMarketModel:
         except:
             pass
 
+    ''' Original method : version du prof APPEND les données à la table
     def df_write(self, df, table, args=None, commit=False,
                  if_exists='append', index=True, index_label=None,
+                 chunksize=1000, dtype=None, method="multi"):'''
+    # Cette version remplace les données si elles existent déjà
+    def df_write(self, df, table, args=None, commit=False,
+                 if_exists='replace', index=True, index_label=None,
                  chunksize=1000, dtype=None, method="multi"):
         '''Write a Pandas dataframe to the Postgres SQL database
 
