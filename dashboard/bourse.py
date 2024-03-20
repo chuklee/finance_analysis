@@ -6,7 +6,8 @@ import pandas as pd
 import sqlalchemy
 import plotly.graph_objs as go
 from datetime import date
-
+from layout import create_layout
+from callback import callbacks  
 
 
 """
@@ -20,6 +21,9 @@ engine = sqlalchemy.create_engine(DATABASE_URI)
 
 app = dash.Dash(__name__,  title="Bourse", suppress_callback_exceptions=True) # , external_stylesheets=external_stylesheets)
 server = app.server
+app.layout = create_layout()
+callbacks(app)
+
 """
 app.layout = html.Div([
                 dcc.Textarea(
@@ -35,7 +39,7 @@ app.layout = html.Div([
                 html.Div(id='query-result')
              ])
 """
-dataframe_finances = pd.read_csv('https://raw.githubusercontent.com/plotly/datasets/master/finance-charts-apple.csv')
+'''dataframe_finances = pd.read_csv('https://raw.githubusercontent.com/plotly/datasets/master/finance-charts-apple.csv')
 app.layout = html.Div([
                 dcc.Graph(
                     id='graph',
@@ -72,7 +76,7 @@ def update_output(start_date, end_date):
     if len(string_prefix) == len('You have selected: '):
         return 'Select a date to see it displayed here'
     else:
-        return string_prefix
+        return string_prefix'''
 """
 @app.callback( ddep.Output('query-result', 'children'),
                ddep.Input('execute-query', 'n_clicks'),
@@ -88,4 +92,4 @@ def run_query(n_clicks, query):
     return "Enter a query and press execute."
 """
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, dev_tools_hot_reload=500)
