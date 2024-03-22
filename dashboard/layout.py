@@ -20,9 +20,16 @@ def create_layout():
     open=dataframe_finances['AAPL.Open'], high=dataframe_finances['AAPL.High'],
     low=dataframe_finances['AAPL.Low'], close=dataframe_finances['AAPL.Close'],
     increasing_line_color= 'green', decreasing_line_color= 'red'
-        )])
-                ),
-                dcc.DatePickerRange(
+        )],
+            layout=dict(
+                title='Graphique',
+                title_x=0.02,
+                title_y=0.95,
+                title_font=dict(size=16)
+            )
+            )
+        ),
+        dcc.DatePickerRange(
         id='my-date-picker-range',
         min_date_allowed=min_date,
         max_date_allowed=max_date,
@@ -31,6 +38,8 @@ def create_layout():
         start_date=min_date
     ),
     html.Div(id='output-container-date-picker-range'),
-    html.Button('Chandelier', id='btn-chandelier', n_clicks=0),
-    html.Button('Ligne de tendance', id='btn-ligne', n_clicks=0),
+    html.Button('Chandelier', id='btn-chandelier', n_clicks=0, style={'background-color': 'lightgray'}, disabled=True, n_clicks_timestamp=0),
+    html.Button('Ligne de tendance', id='btn-ligne', n_clicks=0, style={'background-color': 'white'}, disabled=False, n_clicks_timestamp=0),
+
+
     ])

@@ -9,24 +9,8 @@ from datetime import date
 from data_loader import dataframe_finances
 from layout import create_layout
 
-def callbacks(app):
-    @app.callback(
-        ddep.Output('graph', 'figure'),
-        [ddep.Input('my-date-picker-range', 'start_date'),
-        ddep.Input('my-date-picker-range', 'end_date'),
-         ddep.Input('btn-chandelier', 'n_clicks'),
-        ddep.Input('btn-ligne', 'n_clicks')]
-    )
-    def update_graph(start_date, end_date,chandelier_clicks, line_clicks):
-        # Déterminer le type de graphique en fonction du nombre de clics sur chaque bouton
-        graph_type = 'chandelier' if chandelier_clicks > line_clicks else 'line'
-
-        # Filtrer les données en fonction des dates sélectionnées
-        filtered_df = dataframe_finances[(dataframe_finances['Date'] >= start_date) & (dataframe_finances['Date'] <= end_date)]
-
-        # Créer le graphique en fonction du type sélectionné
-        if graph_type == 'chandelier':
-            candlestick = go.Candlestick(
+def build_candlestick_graph(filtered_df):
+    return go.Figure(data=[go.Candlestick(
                 x=filtered_df['Date'],
                 open=filtered_df['AAPL.Open'],
                 high=filtered_df['AAPL.High'],
@@ -34,18 +18,68 @@ def callbacks(app):
                 close=filtered_df['AAPL.Close'],
                 increasing_line_color='green',
                 decreasing_line_color='red'
-            )
-            figure = go.Figure(data=[candlestick])
-        else:
-            line = go.Scatter(
+            )])
+def build_line_graph(filtered_df):
+    return go.Figure(data=[go.Scatter(
                 x=filtered_df['Date'],
                 y=filtered_df['AAPL.Close'],
                 mode='lines',
                 name='AAPL.Close'
-            )
-            figure = go.Figure(data=[line])
+            )])
+def callbacks(app):
+    @app.callback(
+    ddep.Output('graph', 'figure'),
+    [ddep.Input('my-date-picker-range', 'start_date'),
+     ddep.Input('my-date-picker-range', 'end_date'),
+    ddep.Input('btn-chandelier', 'n_clicks_timestamp'),
+     ddep.Input('btn-ligne', 'n_clicks_timestamp')]
+    )
+    def update_graph(start_date, end_date,
+                 btn_chandelier_timestamp, btn_ligne_timestamp):
 
+        # Filter the data based on the selected dates
+        filtered_df = dataframe_finances[(dataframe_finances['Date'] >= start_date) & (dataframe_finances['Date'] <= end_date)]
+        if btn_ligne_timestamp > btn_chandelier_timestamp:
+            graph_type = 'ligne'
+        else:
+            graph_type = 'chandelier'
+
+        # Create the graph based on the selected type
+        if graph_type == 'chandelier':
+
+            figure = build_candlestick_graph(filtered_df)
+
+        else:
+            figure = build_line_graph(filtered_df)
+        
+        
+        figure.update_layout(
+            title='Graphique de la valeur de l\'action Apple',
+            title_x=0.02,
+            title_y=0.95,
+            title_font=dict(size=16)
+        )
         return figure
+    @app.callback(
+    [ddep.Output('btn-chandelier', 'style'),
+     ddep.Output('btn-ligne', 'style'),
+     ddep.Output('btn-chandelier', 'disabled'),
+     ddep.Output('btn-ligne', 'disabled')],
+    [ddep.Input('btn-chandelier', 'n_clicks'),
+     ddep.Input('btn-ligne', 'n_clicks')]
+
+    )
+    def update_buttons(btn_chandelier, btn_ligne):
+        changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
+        
+        if 'btn-chandelier' in changed_id:
+            return [{'background-color': 'lightgray'}, {'background-color': 'white'}, True, False]
+        elif 'btn-ligne' in changed_id:
+            return [{'background-color': 'white'}, {'background-color': 'lightgray'}, False, True]
+        else:
+            return [{'background-color': 'lightgray'}, {'background-color': 'white'}, True, False]
+
+
         
         
     
