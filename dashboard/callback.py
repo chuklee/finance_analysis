@@ -7,7 +7,7 @@ import sqlalchemy
 import plotly.graph_objs as go
 from datetime import date
 from data_loader import dataframe_finances
-from layout import create_layout
+from layout import create_layout, create_background
 
 def build_candlestick_graph(filtered_df):
     return go.Figure(data=[go.Candlestick(
@@ -17,15 +17,19 @@ def build_candlestick_graph(filtered_df):
                 low=filtered_df['AAPL.Low'],
                 close=filtered_df['AAPL.Close'],
                 increasing_line_color='green',
-                decreasing_line_color='red'
-            )])
+                decreasing_line_color='red',
+            )],
+            layout= create_background()
+            )
 def build_line_graph(filtered_df):
     return go.Figure(data=[go.Scatter(
                 x=filtered_df['Date'],
                 y=filtered_df['AAPL.Close'],
                 mode='lines',
                 name='AAPL.Close'
-            )])
+            )],
+            layout= create_background()
+            )
 def callbacks(app):
     @app.callback(
     ddep.Output('graph', 'figure'),
@@ -48,6 +52,8 @@ def callbacks(app):
         if graph_type == 'chandelier':
 
             figure = build_candlestick_graph(filtered_df)
+            figure.update_layout(xaxis_rangeslider_visible=False)
+
 
         else:
             figure = build_line_graph(filtered_df)
