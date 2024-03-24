@@ -6,8 +6,8 @@ import timescaledb_model as tsdb
 from datetime import datetime, timezone
 import timeit
 
-db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'db', 'monmdp')        # inside docker
-# db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'localhost', 'monmdp') # outside docker
+# db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'db', 'monmdp')        # inside docker
+db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'localhost', 'monmdp') # outside docker
  
 
 def store_file(name, website, chunk_size):
@@ -39,7 +39,7 @@ def store_file(name, website, chunk_size):
         
         df_stocks['date'] = pd.Timestamp(timestamp_dt)
         df_stocks['cid'] = 0  # Replace with the actual company ID
-        db.df_write(df_stocks, "stocks", chunksize=chunk_size,  commit=False)
+        db.df_write(df_stocks, "stocks", chunksize=chunk_size,  commit=True)
         # debug
         #print(df_stocks) 
 
@@ -50,12 +50,22 @@ def process_debug_mode(dir, year, n) :
     try:
         print("Starting")
         print(datetime.now(timezone.utc))
+        # Used to log and debug, to be removed
+        """ 
+        debug mode
         log_filename = "logs_.txt" + year 
         with open(log_filename, "a", encoding="utf-8") as file_logs:
             files = os.listdir(dir + year)
             for file in files:
                 file_logs.write("Processing file: " + file + "\n")
-                store_file(file, "boursorama", n)
+                store_file(file, "boursorama", n) 
+                  """
+        files = os.listdir(dir + year)
+        for file in files:
+            store_file(file, "boursorama", n) 
+        
+            # df_files_done = pd.DataFrame(files, columns=["name"])
+            # db.df_write(df_files_done, "file_done", chunksize=n, commit=True)
         print("Ending")
         print(datetime.now(timezone.utc))
     except Exception as e:
@@ -77,13 +87,15 @@ def process(dir, n) :
 
 '''
 
+
+
 if __name__ == '__main__':
     print("Starting the process")
-    
+    dir = "../docker/data/boursorama/"
+    process_debug_mode(dir , "2019", 10000000)
     '''
     Uncomment the following lines to process the data
-    dir = "../docker/data/boursorama/"
-    process_debug_mode("dir , 2019", 10000000)
+    store_file("compB 2021-09-27 103201.317815.bz2", "boursorama", 10000000)
     process_debug_mode("dir , 2020", 10000000)
     process_debug_mode("dir , 2021", 10000000)
     process_debug_mode("dir , 2022", 10000000)

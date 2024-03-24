@@ -141,14 +141,6 @@ class TimescaleStockMarketModel:
         except:
             pass
 
-    ''' 
-    Original method : version du prof APPEND les données à la table
-    
-    # Cette version remplace les données si elles existent déjà
-    def df_write(self, df, table, args=None, commit=False,
-                 if_exists='replace', index=True, index_label=None,
-                 chunksize=1000, dtype=None, method="multi"):'''
-    
     def df_write(self, df, table, args=None, commit=False,
                  if_exists='append', index=True, index_label=None,
                  chunksize=1000, dtype=None, method="multi"):
@@ -253,6 +245,13 @@ class TimescaleStockMarketModel:
         Return a dataframe with all companies
         '''
         return self.df_query('SELECT * FROM companies')
+    
+    """ def create_companies_table(self, commit=False):
+        cursor = self.__connection.cursor()
+        cursor.execute("INSERT INTO companies (id, name) SELECT DISTINCT id FROM stocks;")
+        if commit:
+            self.commit() """
+        # INSERT dbo.table1(id) SELECT DISTINCT id FROM dbo.table0;
 #
 # main
 #
