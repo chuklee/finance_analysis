@@ -246,11 +246,11 @@ class TimescaleStockMarketModel:
         '''
         return self.df_query('SELECT * FROM companies')
     
-    """ def create_companies_table(self, commit=False):
+    def create_companies_table(self, commit=False):
         cursor = self.__connection.cursor()
-        cursor.execute("INSERT INTO companies (id, name) SELECT DISTINCT id FROM stocks;")
+        cursor.execute("INSERT INTO companies (symbol) SELECT DISTINCT symbol FROM stocks;;")
         if commit:
-            self.commit() """
+            self.commit()
         # INSERT dbo.table1(id) SELECT DISTINCT id FROM dbo.table0;
 #
 # main
