@@ -7,7 +7,7 @@ import sqlalchemy
 import plotly.graph_objs as go
 from datetime import date
 from data_loader import dataframe_finances
-from layout import create_layout, create_background
+from layout import create_bollinger_bands_graph, create_background, create_stats_table, create_volume_figure
 
 def build_candlestick_graph(filtered_df):
     return go.Figure(data=[go.Candlestick(
@@ -18,7 +18,10 @@ def build_candlestick_graph(filtered_df):
                 close=filtered_df['AAPL.Close'],
                 increasing_line_color='green',
                 decreasing_line_color='red',
-            )],
+                showlegend=False
+
+            ),
+            *create_bollinger_bands_graph(filtered_df)],
             layout= create_background()
             )
 def build_line_graph(filtered_df):
@@ -26,8 +29,12 @@ def build_line_graph(filtered_df):
                 x=filtered_df['Date'],
                 y=filtered_df['AAPL.Close'],
                 mode='lines',
-                name='AAPL.Close'
-            )],
+                line=dict(color='green'),
+                showlegend= False
+
+                
+            ),
+            *create_bollinger_bands_graph(filtered_df)],
             layout= create_background()
             )
 def callbacks(app):
@@ -58,13 +65,6 @@ def callbacks(app):
         else:
             figure = build_line_graph(filtered_df)
         
-        
-        figure.update_layout(
-            title='Graphique de la valeur de l\'action Apple',
-            title_x=0.02,
-            title_y=0.95,
-            title_font=dict(size=16)
-        )
         return figure
     @app.callback(
     [ddep.Output('btn-chandelier', 'style'),
@@ -79,11 +79,58 @@ def callbacks(app):
         changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
         
         if 'btn-chandelier' in changed_id:
-            return [{'background-color': 'lightgray'}, {'background-color': 'white'}, True, False]
+            return [{'background-color': 'lightgray', 'color': 'white', 'position': 'absolute',
+                    'top': '10px',
+                    'left': '10px'}, 
+                    {'background-color': 'black', 'color': 'white', 'position': 'absolute',
+                    'top': '10px',
+                    'left': '160px'}, True, False]
         elif 'btn-ligne' in changed_id:
-            return [{'background-color': 'white'}, {'background-color': 'lightgray'}, False, True]
+            return [{'background-color': 'black', 'color': 'white', 'position': 'absolute',
+                    'top': '10px',
+                    'left': '10px'}, 
+                    {'background-color': 'lightgray', 'color': 'white', 'position': 'absolute',
+                    'top': '10px',
+                    'left': '160px'}, False, True]
         else:
-            return [{'background-color': 'lightgray'}, {'background-color': 'white'}, True, False]
+            return [{'background-color': 'lightgray', 'color': 'white', 'position': 'absolute',
+                    'top': '10px',
+                    'left': '10px'}, 
+                    {'background-color': 'black', 'color': 'white', 'position': 'absolute',
+                    'top': '10px',
+                    'left': '160px'}, True, False]
+    @app.callback(
+    ddep.Output('stats-table-container', 'children'),
+    [ddep.Input('my-date-picker-range', 'start_date'),
+     ddep.Input('my-date-picker-range', 'end_date')]
+    )
+    def update_stats_table(start_date, end_date):
+        filtered_df = dataframe_finances[(dataframe_finances['Date'] >= start_date) & (dataframe_finances['Date'] <= end_date)]
+        return create_stats_table(filtered_df, start_date, end_date)
+
+    @app.callback(
+    ddep.Output('volume_graph', 'figure'),
+    [ddep.Input('my-date-picker-range', 'start_date'),
+     ddep.Input('my-date-picker-range', 'end_date')]
+    )
+    def update_volume_graph(start_date, end_date):
+        filtered_df = dataframe_finances[(dataframe_finances['Date'] >= start_date) & (dataframe_finances['Date'] <= end_date)]
+        return create_volume_figure(filtered_df)
+
+
+
+
+
+
+
+    
+
+
+
+
+
+
+
 
 
         
