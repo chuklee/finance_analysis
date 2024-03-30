@@ -8,7 +8,6 @@ import timeit
 
 # db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'db', 'monmdp')        # inside docker
 db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'localhost', 'monmdp') # outside docker
- 
 
 def store_file(name, website, chunk_size):
     if website.lower() == "boursorama":
@@ -26,7 +25,6 @@ def store_file(name, website, chunk_size):
         market_id = name.split()[0]
         if( market_id == "peapme") :
             df_stocks['pea'] = True
-            # Still need to handle the market ID and find it using find company ID
             df_stocks['market_id'] = 0
         else :
             # PEA column is not present so false by default
@@ -60,25 +58,16 @@ def store_file(name, website, chunk_size):
         df_stocks['date'] = pd.Timestamp(timestamp_dt)
         df_stocks['cid'] = 0  # Replace with the actual company ID
         db.df_write(df_stocks, "stocks", chunksize=chunk_size,  commit=True)
-        df_companies = pd.DataFrame({
-                        'cid': [0],  # Replace with the actual company ID
-                        'name': [''],
-                        'mid': [0],
-                        'pea': [False],
-                        'symbol': [''],
-                        'isin': ['']
-                    })
-
-        # Set the index of the DataFrame to 0
-        df_companies.index = [0]
-        db.df_write(df_companies, "companies", chunksize=chunk_size,  commit=True)
+       
         # debug
-        print(df_stocks) 
+        # print(df_stocks) 
 
    # to be finished
    
 
-def process_debug_mode(dir, year, n) :
+def process_debug_mode(dir, year, n, nb_files) :
+    # Line to be removed !!! used to clean the table before processing
+    db.clean_stocks_table(commit=True)
     try:
         print("Starting")
         print(datetime.now(timezone.utc))
@@ -93,11 +82,13 @@ def process_debug_mode(dir, year, n) :
                 store_file(file, "boursorama", n) 
                   """
         files = os.listdir(dir + year)
-        for file in files:
+        # pour l'insant on ne fait pas "file_done" pour éviter de perdre du temps ...
+        #df_files_done = pd.DataFrame(files, columns=['name'])
+        for file in files[:nb_files]:
             store_file(file, "boursorama", n) 
+            #df_files_done.append({"name": file} , ignore_index=True, inplace=True)
+        # db.df_write(df_files_done, "file_done", chunksize=n, commit=True)
         
-            # df_files_done = pd.DataFrame(files, columns=["name"])
-            # db.df_write(df_files_done, "file_done", chunksize=n, commit=True)
         print("Ending")
         print(datetime.now(timezone.utc))
     except Exception as e:
@@ -105,27 +96,49 @@ def process_debug_mode(dir, year, n) :
         print(datetime.now(timezone.utc))
         exit(1) 
 
-'''
-Ideal version of the function
-def process(dir, n) :
-    try:
-        files = os.listdir(dir)
-        for file in files:
-            store_file(file, "boursorama",n)
-    except Exception as e:
-        print("Exception occurred:", e)
-        print(datetime.now(timezone.utc))
-        exit(1) 
 
-'''
+def init_tables():
+    # Create the companies and daystocks table because apparently they are not created ?...
+    df_companies = pd.DataFrame({
+                    'name': [''],
+                    'mid': [0],
+                    'pea': [False],
+                    'symbol': [''],
+                })
+
+    db.df_write(df_companies, "companies", index=False,  commit=True)
+
+    """ df_daystocks = pd.DataFrame({
+        'cid': [0],
+        'date': [pd.Timestamp.now()], # to be changed
+        'open': [0],
+        'close': [0],
+        'high': [0],
+        'low': [0],
+        'volume': [0],
+    })
+    db.df_write(df_daystocks, "daystocks", index=False,  commit=True) """
 
 
+def clean_and_store():
+    db.clean_stocks_table(commit=True)
+    store_file("compB 2021-09-27 103201.317815.bz2", "boursorama", 10000000)
 
 if __name__ == '__main__':
     print("Starting the process")
     dir = "../docker/data/boursorama/"
-    #store_file("compB 2021-09-27 103201.317815.bz2", "boursorama", 10000000)
-    #process_debug_mode(dir , "2019", 10000000)
+    
+    # Test sur 1 fichier compB 2021-09-27 103201.317815.bz2
+    #clean_and_store()
+
+    # Test sur nombre de fichier
+    process_debug_mode(dir , "2019", 10000000, nb_files=10)
+
+    # Create company and day_stocks tables with 1 row of null values
+    init_tables()
+
+    db.create_companies_table(commit=True)
+    db.create_daystocks_table(commit=True)
     '''
     Uncomment the following lines to process the data
     process_debug_mode("dir , 2020", 10000000)
@@ -133,6 +146,5 @@ if __name__ == '__main__':
     process_debug_mode("dir , 2022", 10000000)
     process_debug_mode("dir , 2023", 10000000)
     '''
-    db.create_companies_table(commit=True)
     print("Ending the process")
     
