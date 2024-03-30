@@ -246,12 +246,39 @@ class TimescaleStockMarketModel:
         '''
         return self.df_query('SELECT * FROM companies')
     
-    def create_companies_table(self, commit=False):
+    
+    def clean_stocks_table(self, commit=False):
         cursor = self.__connection.cursor()
-        cursor.execute("INSERT INTO companies (symbol) SELECT DISTINCT symbol FROM stocks;;")
+        cursor.execute("drop schema public cascade;")
+        cursor.execute("create schema public;")
         if commit:
             self.commit()
-        # INSERT dbo.table1(id) SELECT DISTINCT id FROM dbo.table0;
+
+    def create_companies_table(self, commit=False):
+        cursor = self.__connection.cursor()
+
+
+        # Handle company ID (cid)
+        cursor.execute("INSERT INTO companies (symbol) SELECT DISTINCT symbol FROM stocks")
+        cursor.execute("CREATE SEQUENCE company_id_seq;") # Really weird  todo : since it should has been already done in the database init
+        cursor.execute("ALTER TABLE companies ADD COLUMN id INTEGER DEFAULT nextval('company_id_seq') PRIMARY KEY;")
+
+        # transfer data from stocks to companies and vice versa
+        cursor.execute("UPDATE companies AS c SET name = s.name, pea = s.pea, mid = s.market_id FROM stocks AS s WHERE c.symbol = s.symbol;")
+        cursor.execute("UPDATE stocks SET cid = c.id FROM companies AS c WHERE c.symbol = stocks.symbol;")
+        
+        # drop unneeded columns in stocks
+        cursor.execute("ALTER TABLE stocks DROP name, DROP pea, DROP market_id, DROP symbol;")
+        if commit:
+            self.commit()
+
+    def create_daystocks_table(self, commit=False):
+        cursor = self.__connection.cursor()
+        cursor.execute("SELECT DISTINCT Date(date), cid, first_value(value) OVER (PARTITION BY Date(date), cid ORDER BY Date(date)) AS open, last_value(value) OVER (PARTITION BY Date(date), cid ORDER BY Date(date)) AS close, MAX(value) OVER (PARTITION BY Date(date), cid ORDER BY Date(date) RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS high, MIN(value) OVER (PARTITION BY Date(date), cid ORDER BY Date(date) RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS low, SUM(volume) OVER (PARTITION BY Date(date), cid ORDER BY Date(date) RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS volume FROM stocks GROUP BY Date(date), cid, value, volume ORDER BY cid, Date(date);")
+        if commit:
+            self.commit()
+
+
 #
 # main
 #
