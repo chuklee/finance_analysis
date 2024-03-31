@@ -1,2 +1,8 @@
 *.tar
 docker-compose.yml
+*/timescaledb
+*/docker/data/boursorama
+
+timescaledb/
+analyzer/__pycache__/
+docker/data/
