@@ -252,7 +252,6 @@ class TimescaleStockMarketModel:
         '''
         return self.df_query('SELECT * FROM stocks')
 
-
     def modify_stocks_table(self, commit=False):
         cursor = self.__connection.cursor()
         cursor.execute("ALTER TABLE stocks ADD COLUMN name VARCHAR, ADD COLUMN pea BOOLEAN, ADD COLUMN mid SMALLINT, ADD COLUMN symbol VARCHAR;")
@@ -294,12 +293,6 @@ class TimescaleStockMarketModel:
         if commit:
             self.commit()
 
-    def create_daystocks_table(self, commit=False):
-        cursor = self.__connection.cursor()
-        # This query does not work ...
-        cursor.execute("INSERT INTO daystocks (date, cid, open, close, high, low, volume) SELECT DISTINCT Date(date), cid, first_value(value) OVER (PARTITION BY Date(date), cid ORDER BY Date(date)) AS open, last_value(value) OVER (PARTITION BY Date(date), cid ORDER BY Date(date)) AS close, MAX(value) OVER (PARTITION BY Date(date), cid ORDER BY Date(date) RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS high, MIN(value) OVER (PARTITION BY Date(date), cid ORDER BY Date(date) RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS low, SUM(volume) OVER (PARTITION BY Date(date), cid ORDER BY Date(date) RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS volume FROM stocks GROUP BY Date(date), cid, value, volume ORDER BY cid, Date(date);")
-        if commit:
-            self.commit()
 
 
 #
