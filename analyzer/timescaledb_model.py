@@ -246,37 +246,53 @@ class TimescaleStockMarketModel:
         '''
         return self.df_query('SELECT * FROM companies')
     
-    
-    def clean_stocks_table(self, commit=False):
+    def get_stocks(self):
+        '''
+        Return a dataframe with all stocks
+        '''
+        return self.df_query('SELECT * FROM stocks')
+
+    def modify_stocks_table(self, commit=False):
         cursor = self.__connection.cursor()
-        cursor.execute("drop schema public cascade;")
-        cursor.execute("create schema public;")
+        cursor.execute("ALTER TABLE stocks ADD COLUMN name VARCHAR, ADD COLUMN pea BOOLEAN, ADD COLUMN mid SMALLINT, ADD COLUMN symbol VARCHAR;")
+        if commit:
+            self.commit()
+    
+    def restore_table(self, commit=True):
+        cursor = self.__connection.cursor()
+        # Update stocks
+        cursor.execute("UPDATE stocks SET cid = c.id FROM companies AS c WHERE c.symbol = stocks.symbol;")
+
+        # Remove columns in stocks and constraint in companies
+        cursor.execute("ALTER TABLE stocks DROP name, DROP pea, DROP mid, DROP symbol;")
+        cursor.execute("ALTER TABLE companies DROP CONSTRAINT symbol_unique_constraint;")
+
         if commit:
             self.commit()
 
     def create_companies_table(self, commit=False):
         cursor = self.__connection.cursor()
 
+        # 1ère méthode
 
         # Handle company ID (cid)
-        cursor.execute("INSERT INTO companies (symbol) SELECT DISTINCT symbol FROM stocks")
-        cursor.execute("CREATE SEQUENCE company_id_seq;") # Really weird  todo : since it should has been already done in the database init
-        cursor.execute("ALTER TABLE companies ADD COLUMN id INTEGER DEFAULT nextval('company_id_seq') PRIMARY KEY;")
-
+        """  cursor.execute("INSERT INTO companies (symbol) SELECT DISTINCT symbol FROM stocks")
         # transfer data from stocks to companies and vice versa
-        cursor.execute("UPDATE companies AS c SET name = s.name, pea = s.pea, mid = s.market_id FROM stocks AS s WHERE c.symbol = s.symbol;")
-        cursor.execute("UPDATE stocks SET cid = c.id FROM companies AS c WHERE c.symbol = stocks.symbol;")
+        cursor.execute("UPDATE companies AS c SET name = s.name, pea = s.pea, mid = s.mid FROM stocks AS s WHERE c.symbol = s.symbol;")
+        """ 
         
-        # drop unneeded columns in stocks
-        cursor.execute("ALTER TABLE stocks DROP name, DROP pea, DROP market_id, DROP symbol;")
+
+        # 2ème méthode
+        # Add a unique constraint to the symbol column in the companies table
+        cursor.execute("ALTER TABLE companies ADD CONSTRAINT symbol_unique_constraint UNIQUE (symbol);")
+        # Now we can use ON CONFLICT with the symbol column
+        #cursor.execute("WITH distinct_symbols AS (SELECT DISTINCT symbol, name, pea, mid FROM stocks) INSERT INTO companies (symbol, name, pea, mid) SELECT symbol, name, pea, mid FROM distinct_symbols ON CONFLICT (symbol) DO UPDATE SET name = EXCLUDED.name, pea = EXCLUDED.pea, mid = EXCLUDED.mid;")
+
+        # 3ème méthode
+        cursor.execute("INSERT INTO companies (symbol, name, pea, mid) SELECT DISTINCT ON (symbol) symbol, name, pea, mid FROM stocks ON CONFLICT (symbol) DO UPDATE SET name = EXCLUDED.name, pea = EXCLUDED.pea, mid = EXCLUDED.mid;")
         if commit:
             self.commit()
 
-    def create_daystocks_table(self, commit=False):
-        cursor = self.__connection.cursor()
-        cursor.execute("SELECT DISTINCT Date(date), cid, first_value(value) OVER (PARTITION BY Date(date), cid ORDER BY Date(date)) AS open, last_value(value) OVER (PARTITION BY Date(date), cid ORDER BY Date(date)) AS close, MAX(value) OVER (PARTITION BY Date(date), cid ORDER BY Date(date) RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS high, MIN(value) OVER (PARTITION BY Date(date), cid ORDER BY Date(date) RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS low, SUM(volume) OVER (PARTITION BY Date(date), cid ORDER BY Date(date) RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS volume FROM stocks GROUP BY Date(date), cid, value, volume ORDER BY cid, Date(date);")
-        if commit:
-            self.commit()
 
 
 #
