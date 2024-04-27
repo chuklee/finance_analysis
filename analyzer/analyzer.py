@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 import concurrent.futures
 import multiprocessing
 
-# db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'db', 'monmdp')        # inside docker
-db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'localhost', 'monmdp') # outside docker
+db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'db', 'monmdp')        # inside docker
+#db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'localhost', 'monmdp') # outside docker
 
 
 def clean_value(value):
@@ -21,7 +21,10 @@ def clean_value(value):
 
 def store_file(name, website):
     if website.lower() == "boursorama":
-        file_path = f"../docker/data/boursorama/{name.split()[1].split('-')[0]}/{name}"
+        #file_path = f"../docker/data/boursorama/{name.split()[1].split('-')[0]}/{name}"
+        file_path = f"/home/bourse/data/boursorama/{name.split()[1].split('-')[0]}/{name}" # inside docker
+        
+        #file_path = f"data/boursorama/{name.split()[1].split('-')[0]}/{name}"
         try:
             df_stocks = pd.read_pickle(file_path)
             #print(df_stocks)
@@ -136,7 +139,9 @@ def fill_daystocks(df_stocks_generator):
 
 if __name__ == '__main__':
     print("Starting the process")
-    dir = "../docker/data/boursorama/"
+    #dir = "../docker/data/boursorama/"
+    dir = "/home/bourse/data/boursorama/" # inside docker
+    
 
     max_workers = multiprocessing.cpu_count()
     print("Number of workers: ", max_workers)
