@@ -7,9 +7,11 @@ import timescaledb_model as tsdb
 # New imports
 from datetime import datetime, timezone
 import concurrent.futures
+import multiprocessing
 
 # db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'db', 'monmdp')        # inside docker
 db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'localhost', 'monmdp') # outside docker
+
 
 def clean_value(value):
     # Remove any non-numeric characters and convert to float
@@ -17,7 +19,7 @@ def clean_value(value):
     return float(cleaned_value) if cleaned_value else np.nan
 
 
-def store_file(name, website, chunk_size):
+def store_file(name, website):
     if website.lower() == "boursorama":
         file_path = f"../docker/data/boursorama/{name.split()[1].split('-')[0]}/{name}"
         try:
@@ -69,34 +71,32 @@ def store_file(name, website, chunk_size):
         
         df_stocks['date'] = pd.Timestamp(timestamp_dt)
         df_stocks['cid'] = 0 
-        db.df_write(df_stocks, "stocks", chunksize=1000, index=True,  commit=True)
-        
-       
+        db.df_write(df_stocks, "stocks", chunksize=100000, index=True,  commit=True)
 
    # to be finished
 
+# A wrapper function for store_file to unpack the arguments
 def store_file_wrapper(args):
-    # A wrapper function for store_file to unpack the arguments
     return store_file(*args)
 
-def process_debug_mode(dir, year, n, nb_files) :
+def fill_stocks_for_year(dir, year, max_workers, nb_files=3738) :
     try:
         print("Starting process for directory year " + year)
         begin = datetime.now(timezone.utc)
         files = os.listdir(os.path.join(dir, year))
         # Prepare arguments for each file to be processed
-        tasks = [(file, "boursorama", n) for file in files[:nb_files]]
-        #tasks = [(file, "boursorama", n) for file in files]
+        tasks = [(file, "boursorama") for file in files[:nb_files]]
+        #tasks = [(file, "boursorama") for file in files]
         
         # Use ProcessPoolExecutor to process files in parallel
-        with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             # Map store_file function to the files
             results = list(executor.map(store_file_wrapper, tasks))
         
-        # Assuming you still want to record which files have been processed
+        # Record which files have been processed
         list_done = [task[0] for task in tasks]
         df_list_done = pd.DataFrame({'name': list_done})
-        db.df_write(df_list_done, "file_done", index=False, chunksize=n, commit=True)
+        db.df_write(df_list_done, "file_done", index=False, chunksize=100000, commit=True)
         
         print("Ending process for directory year " + year)
         end = datetime.now(timezone.utc)
@@ -116,54 +116,62 @@ def resample_group(df):
         'volume': 'max'
     })
 
+def fill_daystocks(df_stocks_generator):
+    #print('Daystocks table processing...')
+
+    # Convert generator to a single DataFrame
+    df_stocks = pd.concat(df_stocks_generator, ignore_index=True)
+    """ 
+    Uncomment the following lines if the columns are not already in the correct format
+    df_stocks['date'] = pd.to_datetime(df_stocks['date'])
+    df_stocks['value'] = pd.to_numeric(df_stocks['value'], errors='coerce')
+    df_stocks['volume'] = pd.to_numeric(df_stocks['volume'], errors='coerce')
+    """
+    df_stocks = df_stocks.set_index('date')
+    result = df_stocks.groupby('cid').apply(resample_group, include_groups=False).dropna()
+    # Reset index to flatten the DataFrame after groupby
+    result = result.reset_index()
+    result.columns = ['cid', 'date', 'open', 'close', 'high', 'low', 'volume']
+    db.df_write(result, "daystocks", chunksize=10000, index=False, commit=True)
 
 if __name__ == '__main__':
     print("Starting the process")
     dir = "../docker/data/boursorama/"
+
+    max_workers = multiprocessing.cpu_count()
+    print("Number of workers: ", max_workers)
+
     begin_whole_process = datetime.now(timezone.utc)
+    
+    # TEMPORALY alter table stocks
     db.modify_stocks_table(commit=True)
-    # Test sur nombre de fichier
-    process_debug_mode(dir , "2020", 1000, nb_files=3738)
-    #process_debug_mode(dir , "2020", 1000, nb_files=100)
+
+    # 1 Read all files for a specific year
+    # 2 Fill stocks table
+    # 3 Fill file_done table
+    fill_stocks_for_year(dir , "2020", max_workers, nb_files=100) #10 %
+    #fill_stocks_for_year(dir , "2020",max_workers , nb_files=100)
+    #fill_stocks_for_year(dir , "2020", max_workers)
+    """
+    fill_stocks_for_year(dir , "2019", max_workers)
+    fill_stocks_for_year(dir , "2020", max_workers)
+    fill_stocks_for_year(dir , "2021", max_workers)
+    fill_stocks_for_year(dir , "2022", max_workers)
+    fill_stocks_for_year(dir , "2023", max_workers) 
+    """
     
     begin__SQL_time = datetime.now(timezone.utc)
+    # Fill companies table
     db.create_companies_table(commit=True)
 
+    # Restore table stocks that has been altered and update the cid column
     db.restore_table(commit=True)
     end_SQL_time = datetime.now(timezone.utc)
     print("Total time for creating SQL tables : ", end_SQL_time - begin__SQL_time)
 
-    #print('Daystocks table processing...')
-    df_stocks_generator = db.get_stocks()
+    df_stocks = db.get_stocks()
+    fill_daystocks(df_stocks)   
 
-    # Convert generator to a single DataFrame
-    df_stocks = pd.concat(df_stocks_generator, ignore_index=True)
-    #print(type(df_stocks))
-    df_stocks['date'] = pd.to_datetime(df_stocks['date'])
-    df_stocks['value'] = pd.to_numeric(df_stocks['value'], errors='coerce')
-    df_stocks['volume'] = pd.to_numeric(df_stocks['volume'], errors='coerce')
-    df_stocks = df_stocks.set_index('date')
-    result = df_stocks.groupby('cid').apply(resample_group).dropna()
-    # Reset index to flatten the DataFrame after groupby
-    result = result.reset_index()
-    result.columns = ['cid', 'date', 'open', 'close', 'high', 'low', 'volume']
-    db.df_write(result, "daystocks", chunksize=1000, index=False, commit=True)
-   
-
-    '''
-    print('Begin total process (create tables companies and daystocks) at :', datetime.now(timezone.utc))
-    print('Total process ended at :', datetime.now(timezone.utc))
-    
-    Uncomment the following lines to process the data
-
-    todo : process upside down and sort files by date DESC
-    process_debug_mode("dir , 2023", 10000000)
-    process_debug_mode("dir , 2022", 10000000)
-    process_debug_mode("dir , 2021", 10000000)
-    process_debug_mode("dir , 2020", 10000000)
-    process_debug_mode("dir , 2019", 10000000)
-    '''
-    print("Ending the process")
     end_whole_process = datetime.now(timezone.utc)
-    print("Total time for the whole process : ", end_whole_process - begin_whole_process)
+    print("Ending the process\nTotal time for the whole process : ", end_whole_process - begin_whole_process)
     
