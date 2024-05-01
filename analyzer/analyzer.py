@@ -56,7 +56,7 @@ def store_file(name, website):
 
         df_stocks = (
             df_stocks
-            .loc[(df_stocks['last'] != 0) & (df_stocks['volume'] != 0)]
+            .loc[(df_stocks['last'] != 0) & (df_stocks['volume'] != 0) & (df_stocks['value'] < 2147483647) ]
             .rename(columns={'last': 'value'})
             .drop(columns=['symbol'])
         )
@@ -77,13 +77,22 @@ def store_file_wrapper(args):
     return store_file(*args)
 
 
-#def fill_stocks_for_year(dir, year, max_workers, nb_files=3738) :
+#def fill_stocks_for_year(dir, year, max_workers, nb_files=3738) : # to be removed
 def fill_stocks_for_year(dir, year, max_workers):
     try:
         print("Starting process for directory year " + year) # to be removed
         begin = datetime.now(timezone.utc) # to be removed
         files = os.listdir(os.path.join(dir, year))
-        tasks = [(file, "boursorama") for file in files]
+        # Get the total number of files
+        num_files = len(files)
+
+        # Calculate starting and ending indices (rounded down) # to be removed
+        #start_index = num_files // 2 # to be removed 
+        #end_index = num_files * 3 // 4 # to be removed
+
+        # Create tasks for files from the starting index (inclusive) to the ending index (exclusive) # to be removed
+        #tasks = [(file, "boursorama") for file in files[start_index:end_index]] # to be removed
+        tasks = [(file, "boursorama") for file in files] 
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             results = list(executor.map(store_file_wrapper, tasks))
         list_done = [task[0] for task in tasks]
@@ -95,7 +104,6 @@ def fill_stocks_for_year(dir, year, max_workers):
     except Exception as e:
         print("Exception occurred:", e)
         exit(1)
-
 
 def resample_group(df):
     return df.resample('D').agg({
@@ -153,17 +161,19 @@ if __name__ == '__main__':
     print(f'fill_stocks_for_year 2023 done at {datetime.now(timezone.utc)}') # to be removed
 
    
-    begin__SQL_time = datetime.now(timezone.utc)
+    begin__SQL_time = datetime.now(timezone.utc) 
     db.create_companies_table(commit=True)
     print(f'db.create_companies_table done at {datetime.now(timezone.utc)}') # to be removed
     db.restore_table(commit=True)
     print(f'db.restore_table (stocks) done at {datetime.now(timezone.utc)}') # to be removed
-    
+   
     chunksize=2000000  
     offset = 0
     i = 0
     # Nombre de rows stocks total : 157713346
+    #stocks_len = db.count_stocks()
     stocks_len = 157713346
+    print("Nombre de rows stocks total : ", stocks_len)
     
     # Create a list of chunk offsets and sizes
     chunk_infos = [(offset, chunksize) for offset in range(0, stocks_len, chunksize)]
@@ -180,7 +190,7 @@ if __name__ == '__main__':
 
     print(f'fill_daystocks done at {datetime.now(timezone.utc)}') # to be removed
     end_SQL_time = datetime.now(timezone.utc) # to be removed
-    print("Total time for creating SQL tables (companies, update stocks and daystocks) : ", end_SQL_time - begin__SQL_time) # to be removed
+    #print("Total time for creating SQL tables (companies, update stocks and daystocks) : ", end_SQL_time - begin__SQL_time) # to be removed
 
     end_whole_process = datetime.now(timezone.utc)
     print("Ending the process\nTotal time for the whole process : ", end_whole_process - begin_whole_process)
