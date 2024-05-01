@@ -14,8 +14,9 @@ db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'localhost', 'monmdp') # 
 
 
 def clean_value(value):
-    # Remove any non-numeric characters and convert to float
-    cleaned_value = ''.join(filter(str.isdigit, str(value)))
+    # Remove any non-numeric characters except decimal point
+    cleaned_value = ''.join(c for c in str(value) if c.isdigit() or c == '.')
+    # Convert to float
     return float(cleaned_value) if cleaned_value else np.nan
 
 
