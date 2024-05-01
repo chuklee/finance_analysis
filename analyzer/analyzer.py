@@ -60,8 +60,8 @@ def store_file(name, website):
             .rename(columns={'last': 'value'})
             .drop(columns=['symbol'])
         )
-        timestamp_str = name.split()[1] + " " + name.split()[2].replace("", ":").replace(".bz2", "") # to be removed
-        #timestamp_str = name.split()[1] + " " + name.split()[2].replace("_", ":").replace(".bz2", "")
+        #timestamp_str = name.split()[1] + " " + name.split()[2].replace("", ":").replace(".bz2", "") # to be removed
+        timestamp_str = name.split()[1] + " " + name.split()[2].replace("_", ":").replace(".bz2", "")
         try:
             timestamp_dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S.%f")
         except ValueError:
@@ -132,7 +132,7 @@ if __name__ == '__main__':
 
     begin_whole_process = datetime.now(timezone.utc)
     # Alter table daystocks for volumes, setting them to bigint
-    """ db.modify_daystocks_table(commit=True)
+    db.modify_daystocks_table(commit=True)
     # TEMPORALY alter table stocks
     db.modify_stocks_table(commit=True)
     
@@ -157,38 +157,30 @@ if __name__ == '__main__':
     db.create_companies_table(commit=True)
     print(f'db.create_companies_table done at {datetime.now(timezone.utc)}') # to be removed
     db.restore_table(commit=True)
-    print(f'db.restore_table (stocks) done at {datetime.now(timezone.utc)}') # to be removed """
+    print(f'db.restore_table (stocks) done at {datetime.now(timezone.utc)}') # to be removed
     
     chunksize=2000000  
     offset = 0
     i = 0
     # Nombre de rows stocks total : 157713346
     stocks_len = 157713346
-    """ while offset < stocks_len:
-        print(f'Processing chunk {i} at {datetime.now(timezone.utc)}')# to be removed
-        chunk = db.get_stocks(chunksize=chunksize, offset=offset)
-        fill_daystocks(chunk)
-        print(f'Chunk {i} done at {datetime.now(timezone.utc)}') # to be removed
-        del chunk  # Free memory after processing each chunk
-        i += 1
-        offset += chunksize """
     
     # Create a list of chunk offsets and sizes
     chunk_infos = [(offset, chunksize) for offset in range(0, stocks_len, chunksize)]
     
     # Create a multiprocessing pool with the desired number of processes
-    pool = multiprocessing.Pool(processes=max_workers)  # Adjust the number of processes as needed
+    pool = multiprocessing.Pool(processes=max_workers)
     
     # Process the chunks in parallel using the pool
     pool.map(process_chunk, chunk_infos)
     
-    # Close the pool and wait for all processes to finish
+    # Wait for all processes to finish
     pool.close()
     pool.join()
 
     print(f'fill_daystocks done at {datetime.now(timezone.utc)}') # to be removed
     end_SQL_time = datetime.now(timezone.utc) # to be removed
-    #print("Total time for creating SQL tables : ", end_SQL_time - begin__SQL_time) # to be removed
+    print("Total time for creating SQL tables (companies, update stocks and daystocks) : ", end_SQL_time - begin__SQL_time) # to be removed
 
     end_whole_process = datetime.now(timezone.utc)
     print("Ending the process\nTotal time for the whole process : ", end_whole_process - begin_whole_process)
