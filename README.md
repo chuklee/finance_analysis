@@ -38,7 +38,7 @@ Le procédé pour remplir la base de données est donc :
    2. Restaurer les colonnes de la table, on supprime donc pea, mid et name.
 5. **<u>DAYSTOCKS TABLE :</u>** Après maintes péripéties, nous n'avons malheureusement pas réussi à implémenter le processus pour daystocks en SQL. Nous avons donc été contraints d'utiliser des dataframes. Or ce qui nous sauve à posteriori, est le fait qu'on ait trouvé comment paralléliser les traitements en utilisant la librairie intégrée à Python : multiprocess. Pour remplir la table daystocks, il faut construire un agrégat de données.
    - Date : pour un jour donné
-   - Volume : Quel a été le pic de volume échangé ? => Max(Volume)
+   - Volume : Quel a été le pic de volume échangé ? => Max(Volume), certes il est potentiellement plus judicieux de prendre la somme totale des volumes échangés, mais dans le cadre du projet, les données ont été relevées de manière éparse toutes les 15 minutes. On a donc décidé de prendre uniquement le maximum. 
    - High : Quel a été le pic de valeur ? => Max(Value)
    - Low : Quel a été le creux le plus bas de valeur ? => Min(Value)
    - Open : Quelle a été la première valeur ? => First_of(Value)

@@ -6,6 +6,7 @@
 import datetime
 import psycopg2
 import pandas as pd
+import psycopg2.pool
 import sqlalchemy
 
 import mylogging
@@ -23,7 +24,11 @@ class TimescaleStockMarketModel:
         """
 
         self.logger = mylogging.getLogger(__name__, filename="/tmp/bourse.log")
-
+        """ self.__connection_pool =  self.connection_pool = psycopg2.pool.SimpleConnectionPool(1, 50, user=user,
+                                                                  password=password,
+                                                                  host=host,
+                                                                  port=port,
+                                                                  database=database) """
         self.__database = database
         self.__user = user or database
         self.__host = host or 'localhost'
@@ -35,6 +40,7 @@ class TimescaleStockMarketModel:
                                              host=self.__host,
                                              password=self.__password)
         self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}')
+        #self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}', pool_size=500, max_overflow=10)
         self.__nf_cid = {}  # cid from netfonds symbol
         self.__boursorama_cid = {}  # cid from netfonds symbol
         self.__market_id = {}  # id of markets from aliases
@@ -42,6 +48,13 @@ class TimescaleStockMarketModel:
         self.logger.info("Setup database generates an error if it exists already, it's ok")
         self._setup_database()
 
+    """ def get_connection(self):
+        return self.connection_pool.getconn()
+
+    def put_connection(self, conn):
+        self.connection_pool.putconn(conn) """
+
+    
 
     def _setup_database(self):
         try:
@@ -118,6 +131,7 @@ class TimescaleStockMarketModel:
             cursor.execute("INSERT INTO markets (id, name, alias) VALUES (8,'Paris compartiment B','compB');")
             cursor.execute("INSERT INTO markets (id, name, alias) VALUES (9,'Bourse Allemande','xetra');")
             cursor.execute("INSERT INTO markets (id, name, alias) VALUES (10,'Bruxelle','bruxelle');")
+
         except Exception as e:
             self.logger.exception('SQL error: %s' % e)
         self.__connection.commit()
@@ -153,11 +167,10 @@ class TimescaleStockMarketModel:
         '''
         self.logger.debug('df_write')
         df.to_sql(table, self.__engine,
-                  if_exists=if_exists, index=index, index_label=index_label,
-                  chunksize=chunksize, dtype=dtype, method=method)
+                if_exists=if_exists, index=index, index_label=index_label,
+                chunksize=chunksize, dtype=dtype, method=method)
         if commit:
             self.commit()
-
     # general query methods
 
     def raw_query(self, query, args=None, cursor=None):
@@ -246,29 +259,39 @@ class TimescaleStockMarketModel:
         '''
         return self.df_query('SELECT * FROM companies')
     
-    def get_stocks(self):
+    
+    def get_stocks(self, chunksize=10000, offset=0):
         '''
-        Return a dataframe with all stocks
+        Return a dataframe with all stocks of chunksize
         '''
-        return self.df_query('SELECT * FROM stocks')
+        return self.df_query('SELECT * FROM stocks LIMIT %s OFFSET %s', (chunksize, offset))
 
     def modify_stocks_table(self, commit=False):
         cursor = self.__connection.cursor()
         cursor.execute("ALTER TABLE stocks ADD COLUMN name VARCHAR, ADD COLUMN pea BOOLEAN, ADD COLUMN mid SMALLINT, ADD COLUMN symbol VARCHAR;")
+        # Change type of volume from INT to BIGINT
+        cursor.execute("ALTER TABLE stocks ALTER COLUMN volume TYPE BIGINT;")
         if commit:
             self.commit()
     
+    def modify_daystocks_table(self, commit=False):
+        cursor = self.__connection.cursor()
+        cursor.execute("ALTER TABLE daystocks ALTER COLUMN volume TYPE BIGINT;")
+        if commit:
+            self.commit()
+    
+    
+    
     def restore_table(self, commit=True):
         cursor = self.__connection.cursor()
-        # Update stocks
         cursor.execute("UPDATE stocks SET cid = c.id FROM companies AS c WHERE c.symbol = stocks.symbol;")
-
         # Remove columns in stocks and constraint in companies
         cursor.execute("ALTER TABLE stocks DROP name, DROP pea, DROP mid, DROP symbol;")
         cursor.execute("ALTER TABLE companies DROP CONSTRAINT symbol_unique_constraint;")
 
         if commit:
             self.commit()
+
 
     def create_companies_table(self, commit=False):
         cursor = self.__connection.cursor()

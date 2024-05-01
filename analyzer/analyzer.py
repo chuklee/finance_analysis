@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 import concurrent.futures
 import multiprocessing
 
-db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'db', 'monmdp')        # inside docker
-#db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'localhost', 'monmdp') # outside docker
+#db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'db', 'monmdp')        # inside docker
+db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'localhost', 'monmdp') # outside docker
 
 
 def clean_value(value):
@@ -21,13 +21,10 @@ def clean_value(value):
 
 def store_file(name, website):
     if website.lower() == "boursorama":
-        #file_path = f"../docker/data/boursorama/{name.split()[1].split('-')[0]}/{name}"
-        file_path = f"/home/bourse/data/boursorama/{name.split()[1].split('-')[0]}/{name}" # inside docker
-        
-        #file_path = f"data/boursorama/{name.split()[1].split('-')[0]}/{name}"
+        file_path = f"../docker/data/boursorama/{name.split()[1].split('-')[0]}/{name}" # outside docker
+        #file_path = f"/home/bourse/data/{name.split()[1].split('-')[0]}/{name}" # inside docker
         try:
             df_stocks = pd.read_pickle(file_path)
-            #print(df_stocks)
         except FileNotFoundError:
             print(f"File {file_path} not found.")
             return
@@ -52,7 +49,6 @@ def store_file(name, website):
                 df_stocks['mid'] = 8
             else :
                 df_stocks['mid'] = 555
-                print("Market ID not found")
 
         
         # Clean 'value' column
@@ -64,8 +60,8 @@ def store_file(name, website):
             .rename(columns={'last': 'value'})
             .drop(columns=['symbol'])
         )
-
-        timestamp_str = name.split()[1] + " " + name.split()[2].replace("", ":").replace(".bz2", "")
+        timestamp_str = name.split()[1] + " " + name.split()[2].replace("", ":").replace(".bz2", "") # to be removed
+        #timestamp_str = name.split()[1] + " " + name.split()[2].replace("_", ":").replace(".bz2", "")
         try:
             timestamp_dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S.%f")
         except ValueError:
@@ -76,41 +72,29 @@ def store_file(name, website):
         df_stocks['cid'] = 0 
         db.df_write(df_stocks, "stocks", chunksize=100000, index=True,  commit=True)
 
-   # to be finished
-
 # A wrapper function for store_file to unpack the arguments
 def store_file_wrapper(args):
     return store_file(*args)
 
-def fill_stocks_for_year(dir, year, max_workers, nb_files=3738) :
+
+#def fill_stocks_for_year(dir, year, max_workers, nb_files=3738) :
+def fill_stocks_for_year(dir, year, max_workers):
     try:
-        print("Starting process for directory year " + year)
-        begin = datetime.now(timezone.utc)
+        print("Starting process for directory year " + year) # to be removed
+        begin = datetime.now(timezone.utc) # to be removed
         files = os.listdir(os.path.join(dir, year))
-        # Prepare arguments for each file to be processed
-        tasks = [(file, "boursorama") for file in files[:nb_files]]
-        #tasks = [(file, "boursorama") for file in files]
-        
-        # Use ProcessPoolExecutor to process files in parallel
+        tasks = [(file, "boursorama") for file in files]
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-            # Map store_file function to the files
             results = list(executor.map(store_file_wrapper, tasks))
-        
-        # Record which files have been processed
         list_done = [task[0] for task in tasks]
         df_list_done = pd.DataFrame({'name': list_done})
         db.df_write(df_list_done, "file_done", index=False, chunksize=100000, commit=True)
-        
-        print("Ending process for directory year " + year)
-        end = datetime.now(timezone.utc)
-        print("Total time for processing year " + year + " : ", end - begin)
+        print("Ending process for directory year " + year) # to be removed
+        end = datetime.now(timezone.utc) # to be removed
+        print("Total time for processing year " + year + " : ", end - begin) # to be removed
     except Exception as e:
         print("Exception occurred:", e)
-        print(datetime.now(timezone.utc))
-        exit(1) 
-
-
-# ex 1 file : store_file("compB 2021-09-27 103201.317815.bz2", "boursorama", 10000000)
+        exit(1)
 
 
 def resample_group(df):
@@ -120,63 +104,92 @@ def resample_group(df):
     })
 
 def fill_daystocks(df_stocks_generator):
-    #print('Daystocks table processing...')
-
     # Convert generator to a single DataFrame
     df_stocks = pd.concat(df_stocks_generator, ignore_index=True)
-    """ 
-    Uncomment the following lines if the columns are not already in the correct format
-    df_stocks['date'] = pd.to_datetime(df_stocks['date'])
-    df_stocks['value'] = pd.to_numeric(df_stocks['value'], errors='coerce')
-    df_stocks['volume'] = pd.to_numeric(df_stocks['volume'], errors='coerce')
-    """
     df_stocks = df_stocks.set_index('date')
     result = df_stocks.groupby('cid').apply(resample_group, include_groups=False).dropna()
     # Reset index to flatten the DataFrame after groupby
     result = result.reset_index()
     result.columns = ['cid', 'date', 'open', 'close', 'high', 'low', 'volume']
-    db.df_write(result, "daystocks", chunksize=10000, index=False, commit=True)
+    db.df_write(result, "daystocks", chunksize=100000, index=False, commit=True)
+
+
+def process_chunk(chunk_info):
+    offset, chunksize = chunk_info
+    print(f'Processing chunk at offset {offset} at {datetime.now(timezone.utc)}')
+    chunk = db.get_stocks(chunksize=chunksize, offset=offset)
+    fill_daystocks(chunk)
+    print(f'Chunk at offset {offset} done at {datetime.now(timezone.utc)}')
 
 if __name__ == '__main__':
-    print("Starting the process")
-    #dir = "../docker/data/boursorama/"
-    dir = "/home/bourse/data/boursorama/" # inside docker
+    print(f"Starting the process at {datetime.now(timezone.utc)}") # to be removed
+    dir = "../docker/data/boursorama/" # outside docker
+    #dir = "/home/bourse/data/" # inside docker
     
 
     max_workers = multiprocessing.cpu_count()
     print("Number of workers: ", max_workers)
 
     begin_whole_process = datetime.now(timezone.utc)
-    
+    # Alter table daystocks for volumes, setting them to bigint
+    """ db.modify_daystocks_table(commit=True)
     # TEMPORALY alter table stocks
     db.modify_stocks_table(commit=True)
-
-    # 1 Read all files for a specific year
-    # 2 Fill stocks table
-    # 3 Fill file_done table
-    fill_stocks_for_year(dir , "2020", max_workers, nb_files=100) #10 %
-    #fill_stocks_for_year(dir , "2020",max_workers , nb_files=100)
-    #fill_stocks_for_year(dir , "2020", max_workers)
-    """
-    fill_stocks_for_year(dir , "2019", max_workers)
-    fill_stocks_for_year(dir , "2020", max_workers)
-    fill_stocks_for_year(dir , "2021", max_workers)
-    fill_stocks_for_year(dir , "2022", max_workers)
-    fill_stocks_for_year(dir , "2023", max_workers) 
-    """
     
+    print(f'db.modify_stocks_table done at {datetime.now(timezone.utc)}') # to be removed
+    fill_stocks_for_year(dir , "2019", max_workers)
+
+    print(f'fill_stocks_for_year 2019 done at {datetime.now(timezone.utc)}') # to be removed
+    fill_stocks_for_year(dir , "2020", max_workers)
+    print(f'fill_stocks_for_year 2020 done at {datetime.now(timezone.utc)}') # to be removed
+    
+    fill_stocks_for_year(dir , "2021", max_workers)
+    print(f'fill_stocks_for_year 2021 done at {datetime.now(timezone.utc)}') # to be removed
+
+    fill_stocks_for_year(dir , "2022", max_workers)
+    print(f'fill_stocks_for_year 2022 done at {datetime.now(timezone.utc)}') # to be removed
+
+    fill_stocks_for_year(dir , "2023", max_workers) 
+    print(f'fill_stocks_for_year 2023 done at {datetime.now(timezone.utc)}') # to be removed
+
+   
     begin__SQL_time = datetime.now(timezone.utc)
-    # Fill companies table
     db.create_companies_table(commit=True)
-
-    # Restore table stocks that has been altered and update the cid column
+    print(f'db.create_companies_table done at {datetime.now(timezone.utc)}') # to be removed
     db.restore_table(commit=True)
-    end_SQL_time = datetime.now(timezone.utc)
-    print("Total time for creating SQL tables : ", end_SQL_time - begin__SQL_time)
+    print(f'db.restore_table (stocks) done at {datetime.now(timezone.utc)}') # to be removed """
+    
+    chunksize=2000000  
+    offset = 0
+    i = 0
+    # Nombre de rows stocks total : 157713346
+    stocks_len = 157713346
+    """ while offset < stocks_len:
+        print(f'Processing chunk {i} at {datetime.now(timezone.utc)}')# to be removed
+        chunk = db.get_stocks(chunksize=chunksize, offset=offset)
+        fill_daystocks(chunk)
+        print(f'Chunk {i} done at {datetime.now(timezone.utc)}') # to be removed
+        del chunk  # Free memory after processing each chunk
+        i += 1
+        offset += chunksize """
+    
+    # Create a list of chunk offsets and sizes
+    chunk_infos = [(offset, chunksize) for offset in range(0, stocks_len, chunksize)]
+    
+    # Create a multiprocessing pool with the desired number of processes
+    pool = multiprocessing.Pool(processes=max_workers)  # Adjust the number of processes as needed
+    
+    # Process the chunks in parallel using the pool
+    pool.map(process_chunk, chunk_infos)
+    
+    # Close the pool and wait for all processes to finish
+    pool.close()
+    pool.join()
 
-    df_stocks = db.get_stocks()
-    fill_daystocks(df_stocks)   
+    print(f'fill_daystocks done at {datetime.now(timezone.utc)}') # to be removed
+    end_SQL_time = datetime.now(timezone.utc) # to be removed
+    #print("Total time for creating SQL tables : ", end_SQL_time - begin__SQL_time) # to be removed
 
     end_whole_process = datetime.now(timezone.utc)
     print("Ending the process\nTotal time for the whole process : ", end_whole_process - begin_whole_process)
-    
+    print('Done')
