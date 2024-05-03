@@ -8,6 +8,7 @@ import psycopg2
 import pandas as pd
 import psycopg2.pool
 import sqlalchemy
+import os
 
 import mylogging
 
@@ -97,6 +98,8 @@ class TimescaleStockMarketModel:
                   value FLOAT4,
                   volume INT
                 );''')
+            #cursor.execute("ALTER TABLE stocks ADD COLUMN name VARCHAR, ADD COLUMN pea BOOLEAN, ADD COLUMN mid SMALLINT, ADD COLUMN symbol VARCHAR;")
+            
             cursor.execute('''SELECT create_hypertable('stocks', by_range('date'));''')
             cursor.execute('''CREATE INDEX idx_cid_stocks ON stocks (cid, date DESC);''')
             cursor.execute(
@@ -293,6 +296,39 @@ class TimescaleStockMarketModel:
             self.commit()
 
 
+    def restore_table2(self, batch_size=2000000, commit=True):
+        cursor = self.__connection.cursor()
+        total_rows = self.count_stocks()
+        print(f"Total rows in stocks: {total_rows}")
+        num_batches = (total_rows + batch_size - 1) // batch_size
+
+        # Process the updates in batches
+        for batch in range(num_batches):
+            offset = batch * batch_size
+            # Use a subquery with LIMIT instead of OFFSET
+            cursor.execute("""
+                UPDATE stocks
+                SET cid = c.id
+                FROM (
+                    SELECT id, symbol
+                    FROM companies
+                    ORDER BY id
+                    LIMIT %s OFFSET %s
+                ) AS c
+                WHERE c.symbol = stocks.symbol
+            """, (batch_size, offset))
+
+            print(f"Processed batch {batch + 1}/{num_batches}")
+
+        cursor.execute("ALTER TABLE stocks DROP name, DROP pea, DROP mid, DROP symbol;")
+        cursor.execute("ALTER TABLE companies DROP CONSTRAINT symbol_unique_constraint;")
+        if commit:
+            self.__connection.commit()
+
+
+    def count_stocks(self):
+        return self.raw_query("SELECT COUNT(*) FROM stocks;")[0][0]
+
     def create_companies_table(self, commit=False):
         cursor = self.__connection.cursor()
 
@@ -316,6 +352,38 @@ class TimescaleStockMarketModel:
         if commit:
             self.commit()
 
+    def df_write_copy(self, df, table, args=None, commit=False,
+             if_exists='append', index=True, index_label=None,
+             chunksize=100000, dtype=None, method="multi"):
+        '''Write a Pandas dataframe to the Postgres SQL database using COPY TO and COPY FROM'''
+        self.logger.debug('df_write_copy_to_copy_from')
+        # Create a temporary file for storing the DataFrame
+        temp_file = '/tmp/temp_data.csv'
+        df.to_csv(temp_file, index=False, header=False, sep='\t')
+
+        # Get the column names from the DataFrame
+        columns = list(df.columns)
+
+        # Open a new cursor
+        cursor = self.__connection.cursor()
+
+        try:
+            # Open the temporary file
+            with open(temp_file, 'r') as f:
+                # Use COPY FROM to load data from the file into the table
+                cursor.copy_from(f, table, sep='\t', columns=columns)
+
+            if commit:
+                self.commit()
+        except Exception as e:
+            self.logger.exception('Error during COPY FROM: %s' % e)
+            raise
+        finally:
+            # Close the cursor
+            cursor.close()
+
+            # Remove the temporary file
+            os.remove(temp_file)
 
 
 #
