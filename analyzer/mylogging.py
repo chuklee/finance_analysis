@@ -19,7 +19,7 @@
 
 import logging
 import logging.handlers
-import os  # <-- Import os module here
+import os  # <-- Import os 
 INFO = logging.INFO
 DEBUG = logging.DEBUG
 
@@ -33,8 +33,8 @@ def getLogger(name, level=log_level,
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     # create file handle if needed
     if filename is not None:
-        #pid = os.getpid()
-        #filename = f"{filename}.{pid}"
+        pid = os.getpid()
+        filename = f"{filename}.{pid}"
         print("Logs of %s go to %s" % (name, filename))
         #import os
         if not os.path.exists(os.path.dirname(filename)):
