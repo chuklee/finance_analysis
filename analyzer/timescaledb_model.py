@@ -12,14 +12,13 @@ import os
 
 import mylogging
 
-import dask.dataframe as dd
 from io import StringIO
 
 
 class TimescaleStockMarketModel:
     """ Bourse model with TimeScaleDB persistence."""
 
-    def __init__(self, database, user=None, host=None, password=None, port=None):
+    '''def __init__(self, database, user=None, host=None, password=None, port=None):
         """Create a TimescaleStockMarketModel
 
         database -- The name of the persistence database.
@@ -29,11 +28,6 @@ class TimescaleStockMarketModel:
         """
 
         self.logger = mylogging.getLogger(__name__, filename="/tmp/bourse.log")
-        """ self.__connection_pool =  self.connection_pool = psycopg2.pool.SimpleConnectionPool(1, 50, user=user,
-                                                                  password=password,
-                                                                  host=host,
-                                                                  port=port,
-                                                                  database=database) """
         self.__database = database
         self.__user = user or database
         self.__host = host or 'localhost'
@@ -44,15 +38,38 @@ class TimescaleStockMarketModel:
                                              user=self.__user,
                                              host=self.__host,
                                              password=self.__password)
-        self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}')
-        #self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}', pool_size=500, max_overflow=10)
+        #self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}')
+        self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}',  pool_size=20, max_overflow=0)
         self.__nf_cid = {}  # cid from netfonds symbol
         self.__boursorama_cid = {}  # cid from netfonds symbol
         self.__market_id = {}  # id of markets from aliases
 
         self.logger.info("Setup database generates an error if it exists already, it's ok")
+        self._setup_database()'''
+    def __init__(self, database, user=None, host=None, password=None, port=None):
+        self.__database = database
+        self.__user = user or database
+        self.__host = host or 'localhost'
+        self.__port = port or 5432
+        self.__password = password or ''
+        self.__squash = False
+        # Set up the database connection and engine to None
+        self.__connection = None
+        self.__engine = None
+        self.setup_connection()
         self._setup_database()
+        self.__nf_cid = {}  # cid from netfonds symbol
+        self.__boursorama_cid = {}  # cid from netfonds symbol
+        self.__market_id = {}  # id of markets from aliases
 
+    def setup_connection(self):
+        """Setup a new database connection."""
+        self.logger = mylogging.getLogger(__name__, filename="/tmp/bourse.log")
+        self.__connection = psycopg2.connect(database=self.__database,
+                                             user=self.__user,
+                                             host=self.__host,
+                                             password=self.__password)
+        self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}',  pool_size=20, max_overflow=0)
     
 
     def _setup_database(self):
@@ -175,7 +192,7 @@ class TimescaleStockMarketModel:
     # general query methods
 
     def raw_query(self, query, args=None, cursor=None):
-        """Return a tuple from a Postgres SQL query"""
+        #Return a tuple from a Postgres SQL query
         if args is None:
             pretty = query
         else:
@@ -184,8 +201,10 @@ class TimescaleStockMarketModel:
         if cursor is None:
             cursor = self.__connection.cursor()
         cursor.execute(query, args)
+        #if query.strip().upper().startswith('SELECT'):
         return cursor.fetchall()
-
+    
+    
     def df_query(self, query, args=None, index_col=None, coerce_float=True, params=None, 
                  parse_dates=None, columns=None, chunksize=1000, dtype=None):
         '''Returns a Pandas dataframe from a Postgres SQL query
@@ -211,22 +230,6 @@ class TimescaleStockMarketModel:
     # write here your methods which SQL requests
 
     def search_company_id(self, name, getmax=1, strict=False):
-        '''
-        Try to find the id of a company in our database.
-
-        :param name: name of the company (or part of)
-        :getmax: number of answers wanted
-        :return: the id of the company if known. 0 if unknown.
-
-        >>> db = TimescaleStockMarketModel('bourse', 'ricou', 'localhost', 'monmdp') # doctest: +ELLIPSIS
-        Logs...
-        >>> db.search_company_id("total")
-        892
-        >>> db.search_company_id("A")   # too many
-        0
-        >>> db.search_company_id("Should not exist !!")
-        0
-        '''
         if getmax > 1:
             res = self.raw_query('SELECT (id) FROM companies WHERE LOWER(name) LIKE LOWER(%s)',
                                  ('%' + name + '%',))
@@ -247,32 +250,34 @@ class TimescaleStockMarketModel:
             return [r[0] for r in res]
         else:
             return 0
+        
+    def search_company_id_by_symbol(self, symbol):
+        cursor = self.__connection.cursor()
+        cursor.execute("SELECT id FROM companies WHERE symbol = %s", (symbol,))
+        result = cursor.fetchone()
+        if result is not None:
+            # Company exists in the database, return the ID
+            return result[0]
+        else:
+            # Company doesn't exist in the database, return a default value
+            return 0
     
     def insert_companies(self, name, pea, mid, symbol, commit=True):
         cursor = self.__connection.cursor()
         cursor.execute("INSERT INTO companies (name, pea, mid, symbol) VALUES (%s, %s, %s, %s) RETURNING id;", (name, pea, mid, symbol))
-        new_id = cursor.fetchone()[0]  # Fetch the ID of the newly added row
-        if commit:
-            self.commit()
-        return new_id
+        result = cursor.fetchone()
+        # cursor.fetchone() method returns a single record or None if no more rows are available.
+        if result is not None:
+            new_id = result[0]  # Fetch the ID of the newly added row
+            if commit:
+                self.commit()
+            return new_id
+        else:
+            self.logger.warning("No ID returned after inserting company: %s, the fetchone method returned None", name)
+            return None
+
 
     def search_company_id_by_symbol(self, name, getmax=1, strict=False):
-        '''
-        Try to find the id of a company in our database.
-
-        :param symbol: symbol of the company (or part of)
-        :getmax: number of answers wanted
-        :return: the id of the company if known. 0 if unknown.
-
-        >>> db = TimescaleStockMarketModel('bourse', 'ricou', 'localhost', 'monmdp') # doctest: +ELLIPSIS
-        Logs...
-        >>> db.search_company_id("AMZN")
-        892
-        >>> db.search_company_id("A")   # too many
-        0
-        >>> db.search_company_id("Should not exist !!")
-        0
-        '''
         if getmax > 1:
             res = self.raw_query('SELECT (id) FROM companies WHERE LOWER(symbol) LIKE LOWER(%s)',
                                  ('%' + name + '%',))
@@ -310,6 +315,14 @@ class TimescaleStockMarketModel:
         cursor = self.__connection.cursor()
         cursor.execute("ALTER TABLE stocks ALTER COLUMN volume TYPE BIGINT;")
         cursor.execute("ALTER TABLE daystocks ALTER COLUMN volume TYPE BIGINT;")
+        self.commit()
+
+    def drop_tables(self):
+        cursor = self.__connection.cursor()
+        cursor.execute("DELETE FROM stocks")
+        cursor.execute("DELETE FROM daystocks")
+        cursor.execute("DELETE FROM companies")
+        cursor.execute("DELETE FROM file_done")
         self.commit()
 
     def df_write_copy(self, df, table, commit=False):

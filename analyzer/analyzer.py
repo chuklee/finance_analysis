@@ -36,8 +36,6 @@ def store_file(name, website):
         timestamp_str = name.split()[1] + " " + name.split()[2].replace("_", ":").replace(".bz2", "")
         df_stocks['date'] = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S.%f")
         
-       
-        
         # Vectorized operation to find or insert companies
         symbols = df_stocks['symbol'].to_numpy()
         names = df_stocks['name'].to_numpy()
@@ -46,51 +44,21 @@ def store_file(name, website):
         df_stocks['cid'] = cids.astype(int)
         df_stocks = df_stocks[['date', 'cid', 'value', 'volume']]
         db.df_write_copy(df_stocks, "stocks",  commit=True)
-        return df_stocks
+        return df_stocks , name
 
-def process_file(file_queue, df_queue):
-    while True:
-        try:
-            file = file_queue.get(timeout=1)
-            # uncomment the following line to see the progress of the process
-            # print(f"Processing file: {file} at {datetime.now(timezone.utc)}") # to be removed
-            df_stocks = store_file(file, "boursorama")
-            df_queue.put(df_stocks)
-        except mp.queues.Empty:
-            break
+
 
 def fill_stocks_for_year(dir, year, nb_files=10):
     try:
-        # Change here to get all files
-        files = os.listdir(os.path.join(dir, year))[:nb_files]
-        
-        file_queue = mp.Queue()
-        df_queue = mp.Queue()
-
-        for file in files:
-            file_queue.put(file)
-
-        processes = []
-        for _ in range(mp.cpu_count()):
-            p = mp.Process(target=process_file, args=(file_queue, df_queue))
-            p.start()
-            processes.append(p)
-
+        db.setup_connection()
+        files = os.listdir(os.path.join(dir, year))[:nb_files] # Change here to get all files
         list_df_stocks_done = []
-        while True:
-            try:
-                df = df_queue.get(timeout=1)
-                list_df_stocks_done.append(df)
-            except mp.queues.Empty:
-                if all(not p.is_alive() for p in processes):
-                    break
-
-        for p in processes:
-            p.join()
-
-        df_files_done = pd.DataFrame({'name': files})
-        db.df_write_copy(df_files_done, "file_done", commit=True)
-        
+        for file in files:
+          df , name = store_file(file, "boursorama")
+          print(f"Processing file : {name}") # to be removed
+          list_df_stocks_done.append(df)
+          db.df_write_copy(pd.DataFrame({'name': [name]}), "file_done", commit=True)
+     
         concatened_df = pd.concat(list_df_stocks_done, ignore_index=True)
         fill_daystocks(concatened_df)
 
@@ -101,6 +69,7 @@ def fill_stocks_for_year(dir, year, nb_files=10):
 
 def resample_group(df):
     return df.resample('D').agg({
+        'cid' : 'first',
         'value': [('open', 'first'), ('close', 'last'), ('high', 'max'), ('low', 'min')],
         #'volume': 'max'
         'volume': 'sum'
@@ -110,11 +79,15 @@ def resample_group(df):
 
 def fill_daystocks(df):
     df = df.set_index('date')
-    result = df.groupby('cid').apply(resample_group, include_groups=False).dropna()
+    
+    #result = df.groupby('cid').apply(resample_group, include_groups=False).dropna()
+    result = df.groupby('cid', group_keys=False).apply(resample_group).dropna()
     # Reset index to flatten the DataFrame after groupby
     result = result.reset_index()
-    result.columns = ['cid', 'date', 'open', 'close', 'high', 'low', 'volume']
+    result.columns = ['date', 'cid', 'open', 'close', 'high', 'low', 'volume']
+    # Reorder columns
     result = result[['cid', 'date', 'open', 'close', 'high', 'low', 'volume']]
+
     db.df_write_copy(result, "daystocks", commit=True)
 
 
@@ -124,15 +97,34 @@ if __name__ == '__main__':
     #dir = "../docker/data/boursorama/"
     print("Start")
     begin_whole_process = datetime.now(timezone.utc)
+    db.setup_connection()
     db.set_volume_bigint()
-    #store_file("amsterdam 2019-01-01 090502.607291.bz2" , "boursorama")
-    store_file("amsterdam 2019-01-01 09_05_02.607291.bz2" , "boursorama")
-    fill_stocks_for_year(dir, "2019", nb_files=10)
-    """ fill_stocks_for_year(dir, "2020", nb_files=10)
-    fill_stocks_for_year(dir, "2021", nb_files=10)
-    fill_stocks_for_year(dir, "2022", nb_files=10)
-    fill_stocks_for_year(dir, "2023", nb_files=10) """
-    
+    store_file("amsterdam 2019-01-01 090502.607291.bz2" , "boursorama")
+    #store_file("amsterdam 2019-01-01 09_05_02.607291.bz2" , "boursorama")
+    # Use one process for each year
+    processes = []
+    p1 = mp.Process(target=fill_stocks_for_year, args=(dir, "2019"))
+    p1.start()
+    processes.append(p1)
+
+    p2 = mp.Process(target=fill_stocks_for_year, args=(dir, "2020"))
+    p2.start()
+    processes.append(p2)
+
+    p3 = mp.Process(target=fill_stocks_for_year, args=(dir, "2021"))
+    p3.start()
+    processes.append(p3)
+
+    p4 = mp.Process(target=fill_stocks_for_year, args=(dir, "2022"))
+    p4.start()
+    processes.append(p4)
+
+    p5 = mp.Process(target=fill_stocks_for_year, args=(dir, "2023"))
+    p5.start()
+    processes.append(p5)
+
+    for p in processes:
+        p.join()
 
     end_whole_process = datetime.now(timezone.utc)
     print(f"Whole process done in {end_whole_process - begin_whole_process}")
