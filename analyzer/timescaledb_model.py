@@ -18,15 +18,12 @@ from io import StringIO
 class TimescaleStockMarketModel:
     """ Bourse model with TimeScaleDB persistence."""
 
-    '''def __init__(self, database, user=None, host=None, password=None, port=None):
+    def __init__(self, database, user=None, host=None, password=None, port=None):
         """Create a TimescaleStockMarketModel
-
         database -- The name of the persistence database.
         user     -- Username to connect with to the database. Same as the
                     database name by default.
-
         """
-
         self.logger = mylogging.getLogger(__name__, filename="/tmp/bourse.log")
         self.__database = database
         self.__user = user or database
@@ -38,38 +35,21 @@ class TimescaleStockMarketModel:
                                              user=self.__user,
                                              host=self.__host,
                                              password=self.__password)
-        #self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}')
-        self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}',  pool_size=20, max_overflow=0)
+        self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}')
         self.__nf_cid = {}  # cid from netfonds symbol
         self.__boursorama_cid = {}  # cid from netfonds symbol
         self.__market_id = {}  # id of markets from aliases
-
         self.logger.info("Setup database generates an error if it exists already, it's ok")
-        self._setup_database()'''
-    def __init__(self, database, user=None, host=None, password=None, port=None):
-        self.__database = database
-        self.__user = user or database
-        self.__host = host or 'localhost'
-        self.__port = port or 5432
-        self.__password = password or ''
-        self.__squash = False
-        # Set up the database connection and engine to None
-        self.__connection = None
-        self.__engine = None
-        self.setup_connection()
         self._setup_database()
-        self.__nf_cid = {}  # cid from netfonds symbol
-        self.__boursorama_cid = {}  # cid from netfonds symbol
-        self.__market_id = {}  # id of markets from aliases
 
-    def setup_connection(self):
-        """Setup a new database connection."""
+    """ def setup_connection(self):
+        # Setup a new database connection
         self.logger = mylogging.getLogger(__name__, filename="/tmp/bourse.log")
         self.__connection = psycopg2.connect(database=self.__database,
                                              user=self.__user,
                                              host=self.__host,
                                              password=self.__password)
-        self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}',  pool_size=20, max_overflow=0)
+        self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}',  pool_size=20, max_overflow=0) """
     
 
     def _setup_database(self):
@@ -251,22 +231,11 @@ class TimescaleStockMarketModel:
         else:
             return 0
         
-    def search_company_id_by_symbol(self, symbol):
-        cursor = self.__connection.cursor()
-        cursor.execute("SELECT id FROM companies WHERE symbol = %s", (symbol,))
-        result = cursor.fetchone()
-        if result is not None:
-            # Company exists in the database, return the ID
-            return result[0]
-        else:
-            # Company doesn't exist in the database, return a default value
-            return 0
     
     def insert_companies(self, name, pea, mid, symbol, commit=True):
         cursor = self.__connection.cursor()
         cursor.execute("INSERT INTO companies (name, pea, mid, symbol) VALUES (%s, %s, %s, %s) RETURNING id;", (name, pea, mid, symbol))
         result = cursor.fetchone()
-        # cursor.fetchone() method returns a single record or None if no more rows are available.
         if result is not None:
             new_id = result[0]  # Fetch the ID of the newly added row
             if commit:
@@ -317,13 +286,6 @@ class TimescaleStockMarketModel:
         cursor.execute("ALTER TABLE daystocks ALTER COLUMN volume TYPE BIGINT;")
         self.commit()
 
-    def drop_tables(self):
-        cursor = self.__connection.cursor()
-        cursor.execute("DELETE FROM stocks")
-        cursor.execute("DELETE FROM daystocks")
-        cursor.execute("DELETE FROM companies")
-        cursor.execute("DELETE FROM file_done")
-        self.commit()
 
     def df_write_copy(self, df, table, commit=False):
         buffer = StringIO()

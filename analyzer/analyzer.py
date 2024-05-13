@@ -50,8 +50,8 @@ def store_file(name, website):
 
 def fill_stocks_for_year(dir, year, nb_files=10):
     try:
-        db.setup_connection()
-        files = os.listdir(os.path.join(dir, year))[:nb_files] # Change here to get all files
+        #files = os.listdir(os.path.join(dir, year))[:nb_files] # Change here to get all files
+        files = os.listdir(os.path.join(dir, year))
         list_df_stocks_done = []
         for file in files:
           df , name = store_file(file, "boursorama")
@@ -97,34 +97,26 @@ if __name__ == '__main__':
     #dir = "../docker/data/boursorama/"
     print("Start")
     begin_whole_process = datetime.now(timezone.utc)
-    db.setup_connection()
     db.set_volume_bigint()
     store_file("amsterdam 2019-01-01 090502.607291.bz2" , "boursorama")
     #store_file("amsterdam 2019-01-01 09_05_02.607291.bz2" , "boursorama")
-    # Use one process for each year
-    processes = []
-    p1 = mp.Process(target=fill_stocks_for_year, args=(dir, "2019"))
-    p1.start()
-    processes.append(p1)
 
-    p2 = mp.Process(target=fill_stocks_for_year, args=(dir, "2020"))
-    p2.start()
-    processes.append(p2)
 
-    p3 = mp.Process(target=fill_stocks_for_year, args=(dir, "2021"))
-    p3.start()
-    processes.append(p3)
-
-    p4 = mp.Process(target=fill_stocks_for_year, args=(dir, "2022"))
-    p4.start()
-    processes.append(p4)
-
-    p5 = mp.Process(target=fill_stocks_for_year, args=(dir, "2023"))
-    p5.start()
-    processes.append(p5)
-
-    for p in processes:
-        p.join()
+    begin2019 = datetime.now(timezone.utc)
+    fill_stocks_for_year(dir, "2019")
+    print(f'2019 done in {datetime.now(timezone.utc) - begin2019}')
+    begin2020 = datetime.now(timezone.utc)
+    fill_stocks_for_year(dir, "2020")
+    print(f'2020 done in {datetime.now(timezone.utc) - begin2020}')
+    begin2021 = datetime.now(timezone.utc)
+    fill_stocks_for_year(dir, "2021")
+    print(f'2021 done in {datetime.now(timezone.utc) - begin2021}')
+    begin2022 = datetime.now(timezone.utc)
+    fill_stocks_for_year(dir, "2022")
+    print(f'2022 done in {datetime.now(timezone.utc) - begin2022}')
+    begin2023 = datetime.now(timezone.utc)
+    fill_stocks_for_year(dir, "2023")
+    print(f'2023 done in {datetime.now(timezone.utc) - begin2023}')
 
     end_whole_process = datetime.now(timezone.utc)
     print(f"Whole process done in {end_whole_process - begin_whole_process}")
