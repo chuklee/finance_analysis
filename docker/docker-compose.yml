@@ -30,7 +30,7 @@ services:
     networks:
       - boursenet
     volumes:
-      - ../data:/home/bourse/data/
+      - ../docker/data/boursorama:/home/bourse/data/
 
   dashboard:
     image: my_dashboard
