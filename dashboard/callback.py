@@ -46,13 +46,17 @@ def build_line_graph(filtered_df):
             )
 def update_graph(start_date, end_date,
                  btn_chandelier_timestamp, btn_ligne_timestamp, dataframe_data):
-        if end_date <= start_date:
-            end_date = pd.DataFrame(dataframe_data)['date'].max().date()
-            start_date = pd.DataFrame(dataframe_data)['date'].min().date()
-
         dataframe_finances = pd.DataFrame(dataframe_data)
-        # Filter the data based on the selected dates
         filtered_df = dataframe_finances[(dataframe_finances['date'] >= start_date) & (dataframe_finances['date'] <= end_date)]
+
+        if filtered_df['volume'].isnull().all():
+            if btn_ligne_timestamp > btn_chandelier_timestamp:
+                return go.Figure(data=[go.Scatter()])
+            else:
+                return go.Figure(data=[go.Candlestick()])
+
+
+        # Filter the data based on the selected dates
         if btn_ligne_timestamp > btn_chandelier_timestamp:
             graph_type = 'ligne'
         else:
@@ -134,7 +138,7 @@ def callbacks(app):
     def update_stats_table(start_date, end_date, dataframe_data):
         dataframe_finances = pd.DataFrame(dataframe_data)
         filtered_df = dataframe_finances[(dataframe_finances['date'] >= start_date) & (dataframe_finances['date'] <= end_date)]
-        return create_stats_table(filtered_df, start_date, end_date)
+        return create_stats_table(filtered_df)
 
     @app.callback(
     ddep.Output('volume_graph', 'figure'),
@@ -159,10 +163,9 @@ def callbacks(app):
         dataframe_finances = load_data(str(cid))
         min_date = pd.to_datetime(dataframe_finances['date'].min())
         max_date = pd.to_datetime(dataframe_finances['date'].max())
-        diff_date = (max_date - min_date) / 2 + min_date
-        return dataframe_finances.to_dict('records'), min_date, max_date, diff_date, min_date, max_date
+        return dataframe_finances.to_dict('records'), min_date, max_date, min_date, min_date, max_date
 
-    @app.callback(
+    ''' @app.callback(
         ddep.Output('date-picker-range', 'min_date_allowed'),
         [ddep.Input('date-picker-range', 'start_date')]
     )
@@ -177,17 +180,4 @@ def callbacks(app):
     def update_start_date_max_allowed(end_date):
         if end_date is not None:
             return end_date
-        raise dash.exceptions.PreventUpdate
-
-    @app.callback( ddep.Output('query-result', 'children'),
-               ddep.Input('execute-query', 'n_clicks'),
-               ddep.State('sql-query', 'value'),
-             )
-    def run_query(n_clicks, query):
-        if n_clicks > 0:
-            try:
-                result_df = pd.read_sql_query(query, engine)
-                return html.Pre(result_df.to_string())
-            except Exception as e:
-                return html.Pre(str(e))
-        return "Enter a query and press execute."
+        raise dash.exceptions.PreventUpdate'''

@@ -12,22 +12,7 @@ from data_loader import load_data
 def create_layout(dataframe_finances):
     min_date = pd.to_datetime(dataframe_finances['date']).min().date()
     max_date = pd.to_datetime(dataframe_finances['date']).max().date()
-    diff_date = (max_date - min_date) / 2 + min_date
     return html.Div([
-        html.Div([
-                dcc.Textarea(
-                    id='sql-query',
-                    value='''
-                        SELECT * FROM pg_catalog.pg_tables
-                            WHERE schemaname != 'pg_catalog' AND 
-                                  schemaname != 'information_schema';
-                    ''',
-                    style={'width': '100%', 'height': 100},
-                    ),
-                html.Button('Execute', id='execute-query', n_clicks=0),
-                html.Div(id='query-result')
-             ])
-    ,
         dcc.Store(id='dataframe-store', storage_type='memory', data=dataframe_finances.to_dict('records'))
         ,
          dcc.Dropdown(
@@ -65,7 +50,7 @@ def create_layout(dataframe_finances):
                 id='my-date-picker-range',
                 min_date_allowed=min_date,
                 max_date_allowed=max_date,
-                initial_visible_month=diff_date,
+                initial_visible_month=min_date,
                 end_date=max_date,
                 start_date=min_date,
                 style={'border-color': 'black',
@@ -73,7 +58,8 @@ def create_layout(dataframe_finances):
                'color': '#333',
                'position': 'absolute',
                'top': '10px',
-               'right': '10px'}
+               'right': '10px'},
+        
             ),
             create_volume_chart(dataframe_finances),
             html.Div(id='output-container-date-picker-range'),
@@ -176,6 +162,8 @@ def create_volume_chart(df):
     )
 
 def create_volume_figure(df):
+    if df['volume'].isnull().all():
+        return go.Figure()
     colors = ['green' if df.loc[i, 'volume'] > df.loc[df.index[df.index.get_loc(i)-1], 'volume'] else 'red' 
           for i in df.index[1:]]
     colors.insert(0, 'green' if df.loc[df.index[0], 'volume'] > 0 else 'red')
@@ -212,7 +200,7 @@ def create_volume_figure(df):
             )
         )
 
-def create_stats_table(df: pd.DataFrame, start_date, end_date):
+def create_stats_table(df: pd.DataFrame):
     df = df.assign(date=pd.to_datetime(df['date']))
     df.set_index('date', inplace=True)
     daily_stats = df.resample('D').agg({
@@ -222,14 +210,6 @@ def create_stats_table(df: pd.DataFrame, start_date, end_date):
         'close': 'last',
         'volume': 'sum'
     })
-    '''
-    daily_stats = df.groupby(pd.Grouper(key='date', freq='D')).agg({
-        'open': 'first',
-        'high': 'max',
-        'low': 'min',
-        'close': 'last',
-        'volume': 'sum'
-    }).reset_index()'''
     daily_stats['Mean'] = daily_stats['close'].mean()
     daily_stats['StdDev'] = daily_stats['close'].std()
 
@@ -274,3 +254,4 @@ def create_stats_table(df: pd.DataFrame, start_date, end_date):
         'fontWeight': 'bold'
         }
     )
+
