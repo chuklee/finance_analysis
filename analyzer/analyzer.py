@@ -72,19 +72,20 @@ def fill_stocks_for_year(dir, year, df_companies, nb_files=10):
         global current_month
         files = os.listdir(os.path.join(dir, year))
         files.sort()
-        files = files[:100]
+        #files = files[:100]
         list_df_stocks_done = []
         for file in files:
           df , name, month = store_file(file, "boursorama", df_companies)
           print(f"Processing file : {name}" , flush=True) # to be removed
           list_df_stocks_done.append(df)
           db.df_write_copy(pd.DataFrame({'name': [name]}), "file_done", commit=True)
-        # todo mettre le if ici 
-        if month != current_month :
+          if month != current_month :
             concatened_df = pd.concat(list_df_stocks_done, ignore_index=True)
             fill_daystocks(concatened_df)
             list_df_stocks_done = []
             current_month = month
+        # todo mettre le if ici 
+        
        
 
     except Exception as e:

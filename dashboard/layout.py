@@ -254,4 +254,3 @@ def create_stats_table(df: pd.DataFrame):
         'fontWeight': 'bold'
         }
     )
-
