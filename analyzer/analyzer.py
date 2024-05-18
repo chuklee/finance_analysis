@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'db', 'monmdp')        # inside docker
 #db = tsdb.TimescaleStockMarketModel('bourse', 'ricou', 'localhost', 'monmdp') # outside docker
 
+current_month = 1
 
 
 def clean_value(value):
@@ -52,12 +53,12 @@ def store_file(name, website):
 
 def fill_stocks_for_year(dir, year, nb_files=10):
     try:
+        global current_month
         files = os.listdir(os.path.join(dir, year))
         files.sort()
         #files = files[:110]
         #print(files)
         list_df_stocks_done = []
-        current_month = 1
         for file in files:
           df , name, month = store_file(file, "boursorama")
           #print(f"Processing file : {name}") # to be removed
@@ -102,7 +103,7 @@ def fill_daystocks(df):
 if __name__ == '__main__':
     dir = "/home/bourse/data/"
     #dir = "../docker/data/boursorama/"
-    print("Start")
+    print("Start", flush=True)
     begin_whole_process = datetime.now(timezone.utc)
     db.set_volume_bigint()
     #store_file("amsterdam 2019-01-01 090502.607291.bz2" , "boursorama")
