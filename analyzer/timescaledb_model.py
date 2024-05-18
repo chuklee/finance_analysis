@@ -12,24 +12,19 @@ import os
 
 import mylogging
 
+from io import StringIO
+
+
 class TimescaleStockMarketModel:
     """ Bourse model with TimeScaleDB persistence."""
 
     def __init__(self, database, user=None, host=None, password=None, port=None):
         """Create a TimescaleStockMarketModel
-
         database -- The name of the persistence database.
         user     -- Username to connect with to the database. Same as the
                     database name by default.
-
         """
-
         self.logger = mylogging.getLogger(__name__, filename="/tmp/bourse.log")
-        """ self.__connection_pool =  self.connection_pool = psycopg2.pool.SimpleConnectionPool(1, 50, user=user,
-                                                                  password=password,
-                                                                  host=host,
-                                                                  port=port,
-                                                                  database=database) """
         self.__database = database
         self.__user = user or database
         self.__host = host or 'localhost'
@@ -41,20 +36,20 @@ class TimescaleStockMarketModel:
                                              host=self.__host,
                                              password=self.__password)
         self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}')
-        #self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}', pool_size=500, max_overflow=10)
         self.__nf_cid = {}  # cid from netfonds symbol
         self.__boursorama_cid = {}  # cid from netfonds symbol
         self.__market_id = {}  # id of markets from aliases
-
         self.logger.info("Setup database generates an error if it exists already, it's ok")
         self._setup_database()
 
-    """ def get_connection(self):
-        return self.connection_pool.getconn()
-
-    def put_connection(self, conn):
-        self.connection_pool.putconn(conn) """
-
+    """ def setup_connection(self):
+        # Setup a new database connection
+        self.logger = mylogging.getLogger(__name__, filename="/tmp/bourse.log")
+        self.__connection = psycopg2.connect(database=self.__database,
+                                             user=self.__user,
+                                             host=self.__host,
+                                             password=self.__password)
+        self.__engine = sqlalchemy.create_engine(f'timescaledb://{self.__user}:{self.__password}@{self.__host}:{self.__port}/{self.__database}',  pool_size=20, max_overflow=0) """
     
 
     def _setup_database(self):
@@ -177,7 +172,7 @@ class TimescaleStockMarketModel:
     # general query methods
 
     def raw_query(self, query, args=None, cursor=None):
-        """Return a tuple from a Postgres SQL query"""
+        #Return a tuple from a Postgres SQL query
         if args is None:
             pretty = query
         else:
@@ -186,8 +181,10 @@ class TimescaleStockMarketModel:
         if cursor is None:
             cursor = self.__connection.cursor()
         cursor.execute(query, args)
+        #if query.strip().upper().startswith('SELECT'):
         return cursor.fetchall()
-
+    
+    
     def df_query(self, query, args=None, index_col=None, coerce_float=True, params=None, 
                  parse_dates=None, columns=None, chunksize=1000, dtype=None):
         '''Returns a Pandas dataframe from a Postgres SQL query
@@ -213,22 +210,6 @@ class TimescaleStockMarketModel:
     # write here your methods which SQL requests
 
     def search_company_id(self, name, getmax=1, strict=False):
-        '''
-        Try to find the id of a company in our database.
-
-        :param name: name of the company (or part of)
-        :getmax: number of answers wanted
-        :return: the id of the company if known. 0 if unknown.
-
-        >>> db = TimescaleStockMarketModel('bourse', 'ricou', 'localhost', 'monmdp') # doctest: +ELLIPSIS
-        Logs...
-        >>> db.search_company_id("total")
-        892
-        >>> db.search_company_id("A")   # too many
-        0
-        >>> db.search_company_id("Should not exist !!")
-        0
-        '''
         if getmax > 1:
             res = self.raw_query('SELECT (id) FROM companies WHERE LOWER(name) LIKE LOWER(%s)',
                                  ('%' + name + '%',))
@@ -249,6 +230,43 @@ class TimescaleStockMarketModel:
             return [r[0] for r in res]
         else:
             return 0
+        
+    
+    def insert_companies(self, name, pea, mid, symbol, commit=True):
+        cursor = self.__connection.cursor()
+        cursor.execute("INSERT INTO companies (name, pea, mid, symbol) VALUES (%s, %s, %s, %s) RETURNING id;", (name, pea, mid, symbol))
+        result = cursor.fetchone()
+        if result is not None:
+            new_id = result[0]  # Fetch the ID of the newly added row
+            if commit:
+                self.commit()
+            return new_id
+        else:
+            self.logger.warning("No ID returned after inserting company: %s, the fetchone method returned None", name)
+            return None
+
+
+    def search_company_id_by_symbol(self, name, getmax=1, strict=False):
+        if getmax > 1:
+            res = self.raw_query('SELECT (id) FROM companies WHERE LOWER(symbol) LIKE LOWER(%s)',
+                                 ('%' + name + '%',))
+        else:
+            res = self.raw_query('SELECT (id) FROM companies WHERE symbol = %s', (name,))
+            if len(res) == 0 and not strict:
+                res = self.raw_query('SELECT (id) FROM companies WHERE LOWER(symbol) LIKE LOWER(%s)', (name,))
+                if len(res) == 0:
+                    res = self.raw_query('SELECT (id) FROM companies WHERE symbol LIKE %s', (name + '%',))
+                    if len(res) == 0:
+                        res = self.raw_query('SELECT (id) FROM companies WHERE symbol LIKE %s', ('%' + name + '%',))
+                        if len(res) == 0:
+                            res = self.raw_query('SELECT (id) FROM companies WHERE LOWER(symbol) LIKE LOWER(%s)',
+                                                 ('%' + name + '%',))
+        if len(res) == 1:
+            return res[0][0]
+        elif len(res) > 1 and len(res) < getmax:
+            return [r[0] for r in res]
+        else:
+            return 0
 
     def is_file_done(self, name):
         '''
@@ -261,131 +279,30 @@ class TimescaleStockMarketModel:
         Return a dataframe with all companies
         '''
         return self.df_query('SELECT * FROM companies')
-    
-    
-    def get_stocks(self, chunksize=10000, offset=0):
-        '''
-        Return a dataframe with all stocks of chunksize
-        '''
-        return self.df_query('SELECT * FROM stocks LIMIT %s OFFSET %s', (chunksize, offset))
 
-    def modify_stocks_table(self, commit=False):
+    def set_volume_bigint(self):
         cursor = self.__connection.cursor()
-        cursor.execute("ALTER TABLE stocks ADD COLUMN name VARCHAR, ADD COLUMN pea BOOLEAN, ADD COLUMN mid SMALLINT, ADD COLUMN symbol VARCHAR;")
-        # Change type of volume from INT to BIGINT
         cursor.execute("ALTER TABLE stocks ALTER COLUMN volume TYPE BIGINT;")
-        if commit:
-            self.commit()
-    
-    def modify_daystocks_table(self, commit=False):
-        cursor = self.__connection.cursor()
         cursor.execute("ALTER TABLE daystocks ALTER COLUMN volume TYPE BIGINT;")
-        if commit:
-            self.commit()
-    
-    
-    
-    def restore_table(self, commit=True):
-        cursor = self.__connection.cursor()
-        cursor.execute("UPDATE stocks SET cid = c.id FROM companies AS c WHERE c.symbol = stocks.symbol;")
-        # Remove columns in stocks and constraint in companies
-        cursor.execute("ALTER TABLE stocks DROP name, DROP pea, DROP mid, DROP symbol;")
-        cursor.execute("ALTER TABLE companies DROP CONSTRAINT symbol_unique_constraint;")
-
-        if commit:
-            self.commit()
+        self.commit()
 
 
-    def restore_table2(self, batch_size=2000000, commit=True):
-        cursor = self.__connection.cursor()
-        total_rows = self.count_stocks()
-        print(f"Total rows in stocks: {total_rows}")
-        num_batches = (total_rows + batch_size - 1) // batch_size
-
-        # Process the updates in batches
-        for batch in range(num_batches):
-            offset = batch * batch_size
-            # Use a subquery with LIMIT instead of OFFSET
-            cursor.execute("""
-                UPDATE stocks
-                SET cid = c.id
-                FROM (
-                    SELECT id, symbol
-                    FROM companies
-                    ORDER BY id
-                    LIMIT %s OFFSET %s
-                ) AS c
-                WHERE c.symbol = stocks.symbol
-            """, (batch_size, offset))
-
-            print(f"Processed batch {batch + 1}/{num_batches}")
-
-        cursor.execute("ALTER TABLE stocks DROP name, DROP pea, DROP mid, DROP symbol;")
-        cursor.execute("ALTER TABLE companies DROP CONSTRAINT symbol_unique_constraint;")
-        if commit:
-            self.__connection.commit()
-
-
-    def count_stocks(self):
-        return self.raw_query("SELECT COUNT(*) FROM stocks;")[0][0]
-
-    def create_companies_table(self, commit=False):
-        cursor = self.__connection.cursor()
-
-        # 1ère méthode
-
-        # Handle company ID (cid)
-        """  cursor.execute("INSERT INTO companies (symbol) SELECT DISTINCT symbol FROM stocks")
-        # transfer data from stocks to companies and vice versa
-        cursor.execute("UPDATE companies AS c SET name = s.name, pea = s.pea, mid = s.mid FROM stocks AS s WHERE c.symbol = s.symbol;")
-        """ 
-        
-
-        # 2ème méthode
-        # Add a unique constraint to the symbol column in the companies table
-        cursor.execute("ALTER TABLE companies ADD CONSTRAINT symbol_unique_constraint UNIQUE (symbol);")
-        # Now we can use ON CONFLICT with the symbol column
-        #cursor.execute("WITH distinct_symbols AS (SELECT DISTINCT symbol, name, pea, mid FROM stocks) INSERT INTO companies (symbol, name, pea, mid) SELECT symbol, name, pea, mid FROM distinct_symbols ON CONFLICT (symbol) DO UPDATE SET name = EXCLUDED.name, pea = EXCLUDED.pea, mid = EXCLUDED.mid;")
-
-        # 3ème méthode
-        cursor.execute("INSERT INTO companies (symbol, name, pea, mid) SELECT DISTINCT ON (symbol) symbol, name, pea, mid FROM stocks ON CONFLICT (symbol) DO UPDATE SET name = EXCLUDED.name, pea = EXCLUDED.pea, mid = EXCLUDED.mid;")
-        if commit:
-            self.commit()
-
-    def df_write_copy(self, df, table, args=None, commit=False,
-             if_exists='append', index=True, index_label=None,
-             chunksize=100000, dtype=None, method="multi"):
-        '''Write a Pandas dataframe to the Postgres SQL database using COPY TO and COPY FROM'''
-        self.logger.debug('df_write_copy_to_copy_from')
-        # Create a temporary file for storing the DataFrame
-        temp_file = '/tmp/temp_data.csv'
-        df.to_csv(temp_file, index=False, header=False, sep='\t')
-
-        # Get the column names from the DataFrame
-        columns = list(df.columns)
-
-        # Open a new cursor
-        cursor = self.__connection.cursor()
-
+    def df_write_copy(self, df, table, commit=False):
+        buffer = StringIO()
+        df.to_csv(buffer, index=False, header=False)
+        buffer.seek(0)
         try:
-            # Open the temporary file
-            with open(temp_file, 'r') as f:
-                # Use COPY FROM to load data from the file into the table
-                cursor.copy_from(f, table, sep='\t', columns=columns)
-
+            with self.__connection.cursor() as cursor:
+                cursor.copy_from(buffer, table, sep=',', null='', columns=df.columns.tolist())
             if commit:
-                self.commit()
+                self.__connection.commit()
         except Exception as e:
-            self.logger.exception('Error during COPY FROM: %s' % e)
-            raise
+            self.__connection.rollback()
+            if self.logger:
+                self.logger.error(f"Error during db write: {e}")
+            raise e
         finally:
-            # Close the cursor
-            cursor.close()
-
-            # Remove the temporary file
-            os.remove(temp_file)
-
-
+            buffer.close()
 #
 # main
 #
