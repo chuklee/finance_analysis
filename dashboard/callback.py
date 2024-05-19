@@ -47,15 +47,19 @@ def build_line_graph(filtered_df):
 def update_graph(start_date, end_date,
                  btn_chandelier_timestamp, btn_ligne_timestamp, dataframe_data):
         dataframe_finances = pd.DataFrame(dataframe_data)
-        filtered_df = dataframe_finances[(dataframe_finances['date'] >= start_date) & (dataframe_finances['date'] <= end_date)]
+        if dataframe_finances.get('date') is None:
+            if btn_ligne_timestamp > btn_chandelier_timestamp:
+                return go.Figure(data=[go.Scatter()])
+            else:
+                return go.Figure(data=[go.Candlestick()])
+
+        filtered_df = dataframe_finances[(pd.to_datetime(dataframe_finances['date']) >= start_date) & (pd.to_datetime(dataframe_finances['date']) <= end_date)]
 
         if filtered_df['volume'].isnull().all():
             if btn_ligne_timestamp > btn_chandelier_timestamp:
                 return go.Figure(data=[go.Scatter()])
             else:
                 return go.Figure(data=[go.Candlestick()])
-
-
         # Filter the data based on the selected dates
         if btn_ligne_timestamp > btn_chandelier_timestamp:
             graph_type = 'ligne'
@@ -74,11 +78,7 @@ def update_graph(start_date, end_date,
         
         return figure
   
-def update_date(start_date, end_date, dataframe_data):
-    if end_date <= start_date:
-            end_date = pd.DataFrame(dataframe_data)['date'].max().date()
-            start_date = pd.DataFrame(dataframe_data)['date'].min().date()
-    return start_date, end_date
+
 
 def callbacks(app):
     
@@ -137,7 +137,11 @@ def callbacks(app):
     )
     def update_stats_table(start_date, end_date, dataframe_data):
         dataframe_finances = pd.DataFrame(dataframe_data)
-        filtered_df = dataframe_finances[(dataframe_finances['date'] >= start_date) & (dataframe_finances['date'] <= end_date)]
+        if dataframe_finances.get('date') is None:
+            return html.Div()
+        filtered_df = dataframe_finances[(pd.to_datetime(dataframe_finances['date']) >= start_date) & (pd.to_datetime(dataframe_finances['date']) <= end_date)]
+        if filtered_df['volume'].isnull().all() :
+            return html.Div()
         return create_stats_table(filtered_df)
 
     @app.callback(
@@ -148,7 +152,11 @@ def callbacks(app):
     )
     def update_volume_graph(start_date, end_date, dataframe_data):
         dataframe_finances = pd.DataFrame(dataframe_data)
-        filtered_df = dataframe_finances[(dataframe_finances['date'] >= start_date) & (dataframe_finances['date'] <= end_date)]
+        if dataframe_finances.get('date') is None:
+            return go.Figure()
+        filtered_df = dataframe_finances[(pd.to_datetime(dataframe_finances['date']) >= start_date) & (pd.to_datetime(dataframe_finances['date']) <= end_date)]
+        if filtered_df['volume'].isnull().all():
+            return go.Figure()
         return create_volume_figure(filtered_df)
     @app.callback(
         [ddep.Output('dataframe-store', 'data'),
@@ -164,20 +172,3 @@ def callbacks(app):
         min_date = pd.to_datetime(dataframe_finances['date'].min())
         max_date = pd.to_datetime(dataframe_finances['date'].max())
         return dataframe_finances.to_dict('records'), min_date, max_date, min_date, min_date, max_date
-
-    ''' @app.callback(
-        ddep.Output('date-picker-range', 'min_date_allowed'),
-        [ddep.Input('date-picker-range', 'start_date')]
-    )
-    def update_end_date_min_allowed(start_date):
-        if start_date is not None:
-            return start_date
-        raise dash.exceptions.PreventUpdate
-    @app.callback(
-        ddep.Output('date-picker-range', 'max_date_allowed'),
-        [ddep.Input('date-picker-range', 'end_date')]
-    )
-    def update_start_date_max_allowed(end_date):
-        if end_date is not None:
-            return end_date
-        raise dash.exceptions.PreventUpdate'''

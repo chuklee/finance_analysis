@@ -162,8 +162,6 @@ def create_volume_chart(df):
     )
 
 def create_volume_figure(df):
-    if df['volume'].isnull().all():
-        return go.Figure()
     colors = ['green' if df.loc[i, 'volume'] > df.loc[df.index[df.index.get_loc(i)-1], 'volume'] else 'red' 
           for i in df.index[1:]]
     colors.insert(0, 'green' if df.loc[df.index[0], 'volume'] > 0 else 'red')
@@ -254,3 +252,4 @@ def create_stats_table(df: pd.DataFrame):
         'fontWeight': 'bold'
         }
     )
+
