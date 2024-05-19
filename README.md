@@ -60,5 +60,50 @@ Le procédé pour remplir la base de données est donc :
    - Open : Quelle a été la première valeur ? => First_of(Value)
    - Close: Quelle a été la dernière valeur ? => Last_of(Value)
 
+## Partie Dashboard :
+
+Le code du dashboard a été pensé pour être clair, et il a été fait en sorte que la requête sql pour charger les données soit faite uniquement lorsque qu'on change d'entreprise dans le menu déroulant. Il a aussi été pensé pour éviter les dépendances circulaires.
+
+Le dashboard est composé de 3 parties :
+1. <u>**dataloader.py :**</u> L'engine est créé dans ce fichier pour éviter les dépendances circulaires entre le fichier bourse et celui-ci Ce fichier charge la data d'une entreprise dans un dataframe, avec les colonnes date, open, high, low, close, volume pour l'entreprise en question dans l'ordre croissant avec la date. On ajoute aussi 2 colonnes pour les bandes de bollinger. Enfin, pour le nom de l'entreprise on va l'ajouter au dataframe pour pouvoir l'afficher sur le titre du graphique avec une requête à la table comapnies. 
+2. <u>**layout.py :**</u> Ce fichier contient les différents layout de chaque partie du dahsboard: 
+   - D'abord le graphe en chandelier qui s'affiche pour la premiere entreprise, avec une grille et les légendes qui s'adaptent dynamiquement à l'entreprise.
+   - le date-range-picker en haut a droite.
+   - le menu déroulant qui permet de changer d'entreprise.
+   - des boutons pour changer de type de graphique (chandelier, ligne).
+   - un graphe en barre pour les volumes de l'entreprise. (c'est la feature ajoutée)
+   - une table de statistiques journlières pour l'entreprise.
+   La décision a été prise de faire le dashboard en mode sombre, c'est-à-dire avec un fond noir et des légendes et grilles blanches pour le design. Il y a quand même le menu déroulant et le date-range-picker qui sont en blanc. Malgré les options dash, modifier la couleur du background de ces éléments en noir n'a pas l'air de fonctionner.
+3. <u>**callback.py :**</u> Ce fichier contient le code pour mettre à jour le dashboard en fonction des actions de l'utilisateur:
+   - Le callback qui appelle update_graph pour mettre à jour le graphe en fonction de la date choisie par l'utilisateur sur le range-picker. On fait aussi passer en paramètre le type de graphe choisi par l'utilisateur.
+   - On a aussi un callback pour mettre à jour l'apparence des boutons, pour que lorsqu'il soit selectionné le bouton devienne non éditable et qu'il soit grisé.
+   - Il y a aussi des callbacks pour mettre à jour les volumes et la table de stat en fonction de la date.
+   - Enfin, il y a un callback pour mettre à jour les données en fonction de l'entrprise choisie par l'utilisateur. On fait appel à la fonction load_data pour charger les données de l'entreprise choisie et on les stock dans un dcc.Store. Tout les autes callbacks prennent ce store en paramètre et dès qu'il change les graphes se mettent à jour.
+   La difficulté principale de cette partie a été de comprendre comment fonctionnait les callbacks et surtout comment organiser le code de façon à le répartir dans plusieurs fichiers. Au final le fichier bourse.py fait un appel au 3 autres fichier pour créer l'application dash.
+   Ce problème d'optimisation de code est très intéressant et il est certainement possible de faire quelque chose de plus propre et plus optimisé. Nous avons quand même accordé une attention particulière à l'organisation du code.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
 
 
