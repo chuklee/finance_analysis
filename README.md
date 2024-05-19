@@ -75,12 +75,13 @@ Le dashboard est composé de 3 parties :
    - une table de statistiques journlières pour l'entreprise.
    La décision a été prise de faire le dashboard en mode sombre, c'est-à-dire avec un fond noir et des légendes et grilles blanches pour le design. Il y a quand même le menu déroulant et le date-range-picker qui sont en blanc. Malgré les options dash, modifier la couleur du background de ces éléments en noir n'a pas l'air de fonctionner.
 3. <u>**callback.py :**</u> Ce fichier contient le code pour mettre à jour le dashboard en fonction des actions de l'utilisateur:
-   - Le callback qui appelle update_graph pour mettre à jour le graphe en fonction de la date choisie par l'utilisateur sur le range-picker. On fait aussi passer en paramètre le type de graphe choisi par l'utilisateur.
+   - Le callback qui appelle update_graph pour mettre à jour le graphe en fonction de la date choisie par l'utilisateur sur le range-picker. On fait aussi passer en paramètre le type de graphe choisi par l'utilisateur. Attention, si on choisit une entreprise où les données sont vides, ou alors qu'on choisi une date de début supérieure a la date de fin, on affiche des composants vides. Cela se matérialise dans le code par des conditions pour vérifier si le dataframe est vide dans les callbacks/fonctions concernées.
    - On a aussi un callback pour mettre à jour l'apparence des boutons, pour que lorsqu'il soit selectionné le bouton devienne non éditable et qu'il soit grisé.
    - Il y a aussi des callbacks pour mettre à jour les volumes et la table de stat en fonction de la date.
    - Enfin, il y a un callback pour mettre à jour les données en fonction de l'entrprise choisie par l'utilisateur. On fait appel à la fonction load_data pour charger les données de l'entreprise choisie et on les stock dans un dcc.Store. Tout les autes callbacks prennent ce store en paramètre et dès qu'il change les graphes se mettent à jour.
-   La difficulté principale de cette partie a été de comprendre comment fonctionnait les callbacks et surtout comment organiser le code de façon à le répartir dans plusieurs fichiers. Au final le fichier bourse.py fait un appel au 3 autres fichier pour créer l'application dash.
-   Ce problème d'optimisation de code est très intéressant et il est certainement possible de faire quelque chose de plus propre et plus optimisé. Nous avons quand même accordé une attention particulière à l'organisation du code.
+
+La difficulté principale de cette partie a été de comprendre comment fonctionnait les callbacks et surtout comment organiser le code de façon à le répartir dans plusieurs fichiers. Au final le fichier bourse.py fait un appel au 3 autres fichier pour créer l'application dash. 
+Ce problème d'optimisation de code est très intéressant et il est certainement possible de faire quelque chose de plus propre et plus optimisé. Nous avons quand même accordé une attention particulière à l'organisation du code.
 
 
 
