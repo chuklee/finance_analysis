@@ -280,6 +280,18 @@ class TimescaleStockMarketModel:
         '''
         return self.df_query('SELECT * FROM companies')
 
+    def get_statistics_on_tables(self):
+        '''
+        Return a dataframe with all companies
+        '''
+        stocks = self.raw_query("SELECT COUNT(*) FROM stocks;")[0][0]
+        companies = self.raw_query("SELECT COUNT(*) FROM companies;")[0][0]
+        daystocks = self.raw_query("SELECT COUNT(*) FROM daystocks;")[0][0]
+        file_done = self.raw_query("SELECT COUNT(*) FROM file_done;")[0][0]
+        return stocks, companies, daystocks, file_done
+
+    
+        
     def set_volume_bigint(self):
         cursor = self.__connection.cursor()
         cursor.execute("ALTER TABLE stocks ALTER COLUMN volume TYPE BIGINT;")

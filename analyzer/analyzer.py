@@ -28,16 +28,12 @@ def store_file(name, website, df_companies):
         df_stocks = pd.read_pickle(file_path)
         if df_stocks.empty:
             return
-        
-        
-        #name = name.replace("", ":").replace(".bz2", "")
-        #print('name = ' , name , flush=True)
 
         # Clean 'value' column
         df_stocks['last'] = df_stocks['last'].apply(clean_value)
         df_stocks = (
             df_stocks
-            .drop_duplicates(subset=['last'])
+            #.drop_duplicates(subset=['last'])
             .loc[(df_stocks['last'] != 0) & (df_stocks['volume'] != 0) & (df_stocks['last'] < 2147483647) ]
             .rename(columns={'last': 'value'})
         )
@@ -54,7 +50,7 @@ def store_file(name, website, df_companies):
         
         name = name.replace("_", ":").replace(".bz2", "")
 
-        timestamp_str = name.split()[1] + " " + name.split()[2] # to be removed
+        timestamp_str = name.split()[1] + " " + name.split()[2]
         date =  datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S.%f")
         df_stocks['date'] = date
         df_stocks = df_stocks[['date', 'cid', 'value', 'volume']]
@@ -76,7 +72,7 @@ def fill_stocks_for_year(dir, year, df_companies, nb_files=10):
         list_df_stocks_done = []
         for file in files:
           df , name, month = store_file(file, "boursorama", df_companies)
-          print(f"Processing file : {name}" , flush=True) # to be removed
+          #print(f"Processing file : {name}" , flush=True) # to be removed
           list_df_stocks_done.append(df)
           db.df_write_copy(pd.DataFrame({'name': [name]}), "file_done", commit=True)
           if month != current_month :
@@ -84,7 +80,6 @@ def fill_stocks_for_year(dir, year, df_companies, nb_files=10):
             fill_daystocks(concatened_df)
             list_df_stocks_done = []
             current_month = month
-        # todo mettre le if ici 
         
        
 
@@ -97,8 +92,8 @@ def resample_group(df):
     return df.resample('D').agg({
         'cid' : 'first',
         'value': [('open', 'first'), ('close', 'last'), ('high', 'max'), ('low', 'min')],
-        #'volume': 'max'
-        'volume': 'sum'
+        'volume': 'max'
+        #'volume': 'sum'
     })
 
 
@@ -115,6 +110,7 @@ def fill_daystocks(df):
     # Reorder columns
     result = result[['cid', 'date', 'open', 'close', 'high', 'low', 'volume']]
     result['cid'] = result['cid'].astype(int)
+    result['volume'] = result['volume'].astype(np.int64)
     db.df_write_copy(result, "daystocks", commit=True)
 
 
@@ -127,9 +123,9 @@ def fill_companies_table(dir, year):
     files.sort()
     # Dictionary to store the earliest file of each day
     daily_files = {}
-
     for file in files:
         # Extract date and time from filename
+        #amsterdam 2019-01-01 09:05:02.607291.bz2
         parts = file.split()
         date_str = parts[1]
         time_str = parts[2].replace("", ":").replace(".bz2", "")
@@ -181,7 +177,7 @@ if __name__ == '__main__':
     fill_companies_table(dir, "2021")
     fill_companies_table(dir, "2022")
     fill_companies_table(dir, "2023")
-    print(f"Companies done at {datetime.now(timezone.utc)} in {datetime.now(timezone.utc) - begin_companies}", flush=True)
+    #print(f"Companies done at {datetime.now(timezone.utc)} in {datetime.now(timezone.utc) - begin_companies}", flush=True)
     db.set_volume_bigint()
     # Using pandas merge to join stocks with companies on 'symbol', setting 'cid' as index
     df_companies = db.get_companies()
@@ -199,7 +195,12 @@ if __name__ == '__main__':
     print(f"2023 done at {datetime.now(timezone.utc)}", flush=True)
 
     
-    print(f'fill_daystocks done at {datetime.now(timezone.utc)}', flush=True) # to be removed
+    stocks, compa , daystocks , file_done = db.get_statistics_on_tables()
+    print(f'Number of stocks : {stocks}', flush=True)
+    print(f'Number of companies : {compa}', flush=True)
+    print(f'Number of daystocks : {daystocks}', flush=True)
+    print(f'Number of file_done : {file_done}', flush=True)
     end_whole_process = datetime.now(timezone.utc)
     print(f"Whole process done in {end_whole_process - begin_whole_process}", flush=True)
+    
     print('Done', flush=True)
