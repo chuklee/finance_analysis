@@ -46,17 +46,18 @@ Il faut attendre (environ 5 minutes, pour être sûr) qu'un mois de données day
 `DeprecationWarning: DataFrameGroupBy.apply operated on the grouping columns. This behavior is deprecated, and in a future version of pandas the grouping columns will be excluded from the operation. Either pass `include_groups=False` to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning.  result = df.groupby('cid', group_keys=False).apply(resample_group).dropna()`
 
 ```dockerfile
-# Dans un autre terminal
-docker-compose up dashboard
 # Dans dossiers docker/dashboard
 ln -s ../../dashboard dashboard # Créer le symlink vers le 'vrai' dossier dashboard
 make
+# Dans un autre terminal
+docker-compose up dashboard
+
 
 ```
 
 ## Partie Analyzer :
 
-Nous avions essayé X approches différentes, voir totalement opposée au cours de projet (voir commits...).
+Nous avions essayé de nombreuses approches différentes, voir totalement opposées à celle-ci au cours du projet (voir commits...).
 
 La version finale possède la logique est la suivante : utiliser les dataframes au maximum et employer le SQL le moins possible.
 
@@ -76,6 +77,7 @@ Le procédé pour remplir la base de données est donc :
      - Une colonne market_id (**'mid'**) qui correspond au début du nom du fichier. Ex : les actions contenues dans compB 2021-09-27 103201.317815.bz2 auront pour mid celui correspondant au numéro de marché 'compB'. 
        - <u>Remarque :</u>  Concernant les indices a priori mal rangés dans les marchés, nous avons fait des recherches et conclu que par exemple NVIDIA, malgré qu'elle soit une action du Nasdaq Cm, a bien une valeur symbolique dans la bourse Euronext https://live.euronext.com/fr/product/equities/US67066G1040-BGEM/market-information
      - Une colonne pour **'name'** (nom de l'action)
+     - Une colonne pour **'symbol'** (symbole de l'action)
      - Une colonne **'PEA'** qui dépend du nom du fichier : si il contient pea alors les valeurs de cette colonne seront 'true ' sinon 'false'.
      - Les ISIN, SYMBOL_NF, SECTOR, Boursorama ainsi que REUTERS n'ont pas été traitées car nécessitent des appels à des API externes, ce qui pourrait poser problème de stabilité du projet.
    - La création de l'id se faisant automatiquement au fil des insertions grâce à la séquence SQL, on peut passer à l'étape suivante.
@@ -88,18 +90,18 @@ Le procédé pour remplir la base de données est donc :
    - Une colonne **Volume** 
    - Les types de ces deux dernières colonnes ont été converties en BIGINT car autrement dépassent les seuils du type INT. Il en a été de même pour daystocks.
 
-3. **<u>DAYSTOCKS TABLE :</u>** Après maintes péripéties, nous n'avons malheureusement pas réussi à implémenter le processus pour daystocks en utilisant des requêtes SQL. Les fonction `WINDOW` ainsi que `over / partition by` retournant de mauvais résultats, nous avons donc été contraints d'utiliser les dataframes. L'autre problème qui survint est qu'il arrive des erreurs du type `Out of memory`. Ce qui nous sauve fut le fait de traiter les stocks par batch, mois par mois. Pour remplir la table daystocks, il faut construire l'agrégat de données suivant.
+3. **<u>DAYSTOCKS TABLE :</u>** Après maintes péripéties, nous n'avons malheureusement pas réussi à implémenter le processus pour daystocks en utilisant des requêtes SQL. Les fonction `WINDOW` ainsi que `over / partition by` retournant de mauvais résultats, nous avons donc utilisé les dataframes. Le problème qui survint alors est qu'il arrive des erreurs du type `Out of memory`. Ce qui nous sauve fut le fait de traiter les stocks par batch, mois par mois. Pour remplir la table daystocks, il faut construire l'agrégat de données suivant.
 
    - Date : pour un jour donné
    - Volume : Quel a été le pic de volume échangé ? => Max(Volume), certes il est potentiellement plus judicieux de prendre la somme totale des volumes échangés sur la journée. Mais dans le cadre du projet, les données ont été relevées de manière éparse, c'est-à-dire toutes les 15 minutes. Le choix de prendre la somme de toutes les valeurs aurait été nécessaire dans le cadre d'un relevé toutes les minutes. Ici on choisit d'approximer le cours de l'action par jour. On a donc décidé de prendre uniquement le maximum. 
-   - High : Quel a été le pic de valeur ? => Max(Value). En utilisant le dashboard, on s'est apperçu à posteriori qu'il existait souvent des valeurs aberrantes qu'il fallait enlever. Par exemple un cours dont la valeur tourne aux alentours de 1000, avec 1 max à 10000000000. C'est problématique car sur le rendu visuel, cela fausse tout le graphique. On a donc du appliquer un filtre de réduction qui regarde si la valeur se trouve au dessus d'un certain seuil, et si oui ne la prend pas en compte.
+   - High : Quel a été le pic de valeur ? => Max(Value). En utilisant le dashboard, on s'est aperçu à posteriori qu'il existait souvent des valeurs aberrantes qu'il fallait enlever.
    - Low : Quel a été le creux le plus bas de valeur ? => Min(Value)
    - Open : Quelle a été la première valeur ? => First_of(Value)
    - Close: Quelle a été la dernière valeur ? => Last_of(Value)
 
-### Conclusion de l'analyzer :
+### Conclusion sur l'analyzer :
 
-Temps total sur les machines de l'école (salle CISCO): 1h05. Avec à la fin une requête SQL pour compter toutes les lignes de nos tables, donc 1h en réalité.
+Temps total sur les machines de l'école (salle CISCO): 1h05. Avec à la fin une requête SQL (`SELECT COUNT (*) pour chaque table`) pour compter toutes les lignes de nos tables, donc 1h en réalité.
 
 ```js
 2023 done at 2024-05-19 12:55:16.446971+00:00
@@ -133,6 +135,10 @@ Le dashboard est composé de 3 parties :
    - On a aussi un callback pour mettre à jour l'apparence des boutons, pour que lorsqu'il soit selectionné le bouton devienne non éditable et qu'il soit grisé.
    - Il y a aussi des callbacks pour mettre à jour les volumes et la table de stat en fonction de la date.
    - Enfin, il y a un callback pour mettre à jour les données en fonction de l'entrprise choisie par l'utilisateur. On fait appel à la fonction load_data pour charger les données de l'entreprise choisie et on les stock dans un dcc.Store. Tout les autes callbacks prennent ce store en paramètre et dès qu'il change les graphes se mettent à jour.
+
+
+
+### Conclusion sur le Dashboard :
 
 La difficulté principale de cette partie a été de comprendre comment fonctionnait les callbacks et surtout comment organiser le code de façon à le répartir dans plusieurs fichiers. Au final le fichier bourse.py fait un appel au 3 autres fichier pour créer l'application dash. 
 Ce problème d'optimisation de code est très intéressant et il est certainement possible de faire quelque chose de plus propre et plus optimisé. Nous avons quand même accordé une attention particulière à l'organisation du code.
