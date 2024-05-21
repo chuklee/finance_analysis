@@ -34,6 +34,9 @@ make
 
 # Dans un terminal, lancer la db
 docker-compose up db
+# Attendre que la db soit bien lancée (environ 30s) 
+#LOG:  database system is ready to accept connections
+#LOG:  TimescaleDB background worker launcher connected to shared catalogs
 # Dans un autre terminal lancer l'analyzer
 docker-compose up analyzer
 # Attendre 5 minutes
